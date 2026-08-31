@@ -8,7 +8,30 @@ logger = logging.getLogger(__name__)
 
 
 class PolyglotBenchmarker:
-    """Conducts comparative performance benchmarks between Relational SQL and MongoDB NoSQL."""
+    r"""Conducts comparative performance benchmarks between Relational SQL and MongoDB NoSQL.
+
+    Mathematical & Architectural Mechanics:
+    ----------------------------------------
+    1. Relational Tuple Construction vs. Document Locality:
+       - RDBMS Normalized Joins:
+         Relational storage decomposes entities into 3NF normalized tables to eliminate redundancy.
+         Querying an order with items requires Hash Join ($\mathcal{O}(|R| + |S|)$) or Nested Loop
+         Join ($\mathcal{O}(|R| \times |S|)$) traversing foreign key indexes across distinct disk pages.
+       - MongoDB Document Locality:
+         Denormalized embedded subdocuments and arrays ($items$) colocate child line-items
+         within the parent document's contiguous BSON block. Single disk seek reads the entire entity:
+         $$\mathcal{T}_{\text{Embedded}} = \mathcal{O}(1) \text{ Page Seek} \ll \mathcal{T}_{\text{Relational Join}} = \sum_{k=1}^P \text{Seek}(Page_k)$$
+
+    2. Point Lookup Efficiency:
+       B-Tree indexed point lookups in both paradigms scale logarithmically ($\mathcal{O}(\log N)$),
+       but MongoDB's wire protocol returns pre-serialized BSON payloads, avoiding SQL tuple
+       deserialization and column mapping overhead.
+
+    3. Batch Write Amplification:
+       - SQL: Involves multiple round-trip `INSERT` statements or transactional write locks on foreign key indexes.
+       - MongoDB: Bulk `insertMany` utilizes batched wire protocol packets with buffered journal commit,
+         maximizing write IOPS and reducing network round-trips.
+    """
 
     def __init__(self, mongo_db=None, sql_mgr=None):
         self._mongo_db = mongo_db

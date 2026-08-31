@@ -22,7 +22,31 @@ def serialize_bson(obj: Any) -> Any:
 
 
 class CRUDManager:
-    """Manages BSON document CRUD and ACID multi-document transactions."""
+    r"""Manages BSON document CRUD operations and multi-document ACID transactions.
+
+    Algorithmic & Mathematical Architecture:
+    -----------------------------------------
+    1. Atomicity (All-or-Nothing Execution):
+       Multi-document operations guarantee that all state modifications succeed
+       or the database state is restored to its exact pre-transaction image.
+       Mathematically, if an operation sequence is $O = (o_1, o_2, \dots, o_k)$,
+       the state transition function satisfies:
+       $$\mathcal{S}_{t+1} = \begin{cases} \mathcal{S}_t \circ O & \text{if } \forall i, o_i = \text{SUCCESS} \\ \mathcal{S}_t & \text{if } \exists i, o_i = \text{FAILURE} \end{cases}$$
+
+    2. Consistency (Conservation of Invariants):
+       In banking and inventory transactions, balance conservation is strictly preserved:
+       $$\sum_{i=1}^{M} \text{Balance}_i^{(t)} = \sum_{i=1}^{M} \text{Balance}_i^{(t+1)}$$
+       No currency units or stock quantities are created or destroyed during phase transitions.
+
+    3. Isolation (Snapshot & Read Committed):
+       Transactions execute within an isolated snapshot context preventing dirty reads,
+       non-repeatable reads, and phantom modifications across concurrent client sessions.
+
+    4. Durability & Two-Phase Rollback Compensation:
+       In both live replica sets (using MongoDB `w: majority` write concerns) and mock
+       sandboxes, explicit abort triggers deterministic compensation logic to guarantee zero
+       state leakage upon unexpected failures.
+    """
 
     def __init__(self, db=None):
         self._db = db

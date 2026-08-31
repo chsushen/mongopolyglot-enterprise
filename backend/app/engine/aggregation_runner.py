@@ -120,7 +120,33 @@ SYLLABUS_PRESETS = {
 
 
 class AggregationRunner:
-    """Executes multi-stage MongoDB aggregation pipelines with timing and formatting."""
+    r"""Executes multi-stage MongoDB aggregation pipelines with timing and formatting.
+
+    Mathematical & Algorithmic Mechanics:
+    --------------------------------------
+    1. Directed Acyclic Pipeline Sequencing:
+       MongoDB aggregations model computations as a series of unary transformations:
+       $$\mathcal{D}_{\text{out}} = (\mathcal{S}_k \circ \mathcal{S}_{k-1} \circ \dots \circ \mathcal{S}_1)(\mathcal{D}_{\text{in}})$$
+       where each stage $\mathcal{S}_i$ receives an input document stream and emits a transformed stream.
+
+    2. Streaming vs. Memory Barrier Stages:
+       - Streaming Stages ($match, $project, $unwind):
+         Operate on documents lazily one-by-one with $\mathcal{O}(1)$ working memory overhead.
+       - Memory Barrier Stages ($sort, $group, $facet):
+         Require buffering prior stage outputs to build in-memory hash tables ($group)
+         or perform external merge sorts ($sort). Subject to 100MB RAM limit unless `allowDiskUse: true`.
+
+    3. Accumulator Mathematics:
+       - Grouping Hash Map: Partitions input by grouping key $K$: $\mathcal{G}(K) = \{d \in \mathcal{D} \mid \text{key}(d) = K\}$.
+       - Incremental Stream Evaluators:
+         $$\mu_K = \frac{1}{|G_K|} \sum_{x \in G_K} x, \quad \sigma_K^2 = \frac{1}{|G_K|} \sum_{x \in G_K} (x - \mu_K)^2$$
+         computed in a single streaming pass using Welford's algorithm without storing raw document lists.
+
+    4. Unwinding & Array Flattening ($unwind):
+       Given document $D$ with array field $A = [a_1, a_2, \dots, a_m]$, emits $m$ distinct documents:
+       $$D \xrightarrow{\$unwind} \{(D \setminus A) \cup \{A: a_j\}\}_{j=1}^m$$
+       yielding cross-product expansion for fine-grained sub-element analytics.
+    """
 
     def __init__(self, db=None):
         self._db = db

@@ -7,7 +7,35 @@ logger = logging.getLogger(__name__)
 
 
 class IndexProfiler:
-    """Manages index creation, inspection, and executionStats latency profiling."""
+    r"""Manages index creation, inspection, and executionStats latency profiling.
+
+    Mathematical & Algorithmic Complexity:
+    ---------------------------------------
+    1. Full Collection Table Scan (COLLSCAN):
+       Sequential disk/memory scan examining every single document in the collection.
+       Time complexity is strictly linear with respect to collection size $N$:
+       $$\mathcal{T}_{\text{COLLSCAN}}(N) = \mathcal{O}(N)$$
+       Every document page must be loaded into memory and evaluated against predicate $\mathcal{P}$.
+
+    2. B-Tree Index Scan (IXSCAN):
+       Balanced search tree (B-Tree) traversal with branching factor $B \ge 128$.
+       Time complexity to search and retrieve matching keys satisfies logarithmic bounds:
+       $$\mathcal{T}_{\text{IXSCAN}}(N, K) = \mathcal{O}(\log_B N + K)$$
+       where $K$ is the result cardinality ($K \ll N$).
+       Document selectivity ratio:
+       $$\sigma = \frac{K}{N}$$
+       For small $\sigma$, IXSCAN reduces I/O operations by orders of magnitude.
+
+    3. Performance Speedup Ratio:
+       $$\mathcal{S} = \frac{\mathcal{T}_{\text{COLLSCAN}}}{\mathcal{T}_{\text{IXSCAN}}}$$
+       Efficiency gain percentage:
+       $$\mathcal{E} = \left( 1 - \frac{\mathcal{T}_{\text{IXSCAN}}}{\mathcal{T}_{\text{COLLSCAN}}} \right) \times 100\%$$
+
+    4. Geospatial 2dsphere Indexing:
+       Tessellates the spherical Earth model using Google's S2 Geometry library.
+       Hierarchically maps geographic coordinates $[longitude, latitude]$ onto space-filling
+       Hilbert curves for $\mathcal{O}(\log N)$ range and proximity neighbor searches.
+    """
 
     def __init__(self, db=None):
         self._db = db
