@@ -6,9 +6,10 @@
 [![SQLite/MySQL](https://img.shields.io/badge/RDBMS-SQL_Polyglot-003B57.svg?logo=sqlite)](https://sqlite.org)
 [![Syllabus](https://img.shields.io/badge/Syllabus-21CSE562T%20(CLA--2)-8B5CF6.svg)](https://www.srmist.edu.in)
 [![Tests](https://img.shields.io/badge/Tests-13%2F13%20PASSED-10B981.svg)]()
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 > **Enterprise MongoDB & SQL Polyglot Database Platform with Aggregation Pipelines, Performance Profiling, and ACID Transactions.**  
-> Built for **Units 4 & 5 of the 21CSE562T syllabus (Continuous Learning Assessment CLA-2)**.
+> Purpose-built for **Units 4 & 5 of the 21CSE562T syllabus (SQL and NoSQL for Data Science — Continuous Learning Assessment CLA-2)**.
 
 ---
 
@@ -37,46 +38,89 @@
 
 ---
 
-## 🚀 Key Modules & Capabilities
+## 🎯 Direct Academic Alignment to 21CSE562T (Units 4 & 5)
 
-### 1. Advanced MQL Aggregation Pipelines (`backend/app/engine/aggregation_runner.py`)
-- **`$match` & `$group`:** Borough restaurant density, average rating calculations, and capacity analytics.
-- **`$unwind`:** Flattens embedded menu arrays to analyze category pricing and statistical spreads.
-- **`$lookup` (NoSQL Join):** Left outer joins between `orders` and `accounts` to enrich order records with live banking status.
-- **`$facet`:** Multi-faceted simultaneous pipeline execution (revenue by region, payment method frequency, and order status distributions).
-
-### 2. Index Profiling & Optimization (`backend/app/engine/index_profiler.py`)
-- Quantitative comparison between unindexed collection table scans (`COLLSCAN`) and B-Tree index scans (`IXSCAN`).
-- Measures execution time in milliseconds and documents examined vs documents returned ratios.
-- Visual comparative bars and automated production index recommendations.
-
-### 3. Multi-Document ACID Transactions (`backend/app/engine/crud_manager.py`)
-- Simulates banking funds transfer between accounts.
-- Atomic two-phase execution: debit source account, credit destination account, and commit audit trail.
-- **Deterministic Rollback:** Injects mid-transaction network partitions or crashes, validating that debits are rolled back and balances are restored with zero leakage.
-
-### 4. Polyglot Persistence Benchmark (`backend/app/engine/polyglot_benchmarker.py`)
-- Comparative latency benchmark running equivalent queries across SQLite/MySQL and MongoDB BSON stores:
-  1. Point Query Lookup by Primary Key / Indexed ID.
-  2. Multi-Dimension Group By & Aggregation.
-  3. Relational `JOIN` vs Embedded Document Read.
-  4. Batch Document Ingestion (50 records).
-
-### 5. Standard Curricula Datasets (`scripts/`)
-- `restaurants_mcdonalds`: NYC restaurants across 5 boroughs with coordinates, health inspection grades, and menus.
-- `ecommerce_events`: Accounts, users, products, orders, and line items.
+| Syllabus Topic | Practical Realization in MongoPolyglot Enterprise | Source Implementation |
+| :--- | :--- | :--- |
+| **Unit 4: Advanced CRUD** | Full BSON CRUD operations with typed schemas and pagination | [`backend/app/engine/crud_manager.py`](backend/app/engine/crud_manager.py) |
+| **Unit 4: Document Transactions** | Multi-document ACID session transfers with atomic commit & rollback | [`backend/app/engine/crud_manager.py`](backend/app/engine/crud_manager.py) |
+| **Unit 4: Aggregation Pipelines** | Multi-stage MQL: `$match`, `$group`, `$unwind`, `$lookup`, and `$facet` | [`backend/app/engine/aggregation_runner.py`](backend/app/engine/aggregation_runner.py) |
+| **Unit 4: Index Profiling** | Quantitative comparison between unindexed `COLLSCAN` and indexed `IXSCAN` | [`backend/app/engine/index_profiler.py`](backend/app/engine/index_profiler.py) |
+| **Unit 5: Polyglot Persistence** | Comparative execution between normalized SQL and denormalized MongoDB BSON | [`backend/app/engine/polyglot_benchmarker.py`](backend/app/engine/polyglot_benchmarker.py) |
+| **Unit 5: Production Datasets** | Authentic `restaurants_mcdonalds` (NYC) and `ecommerce_events` | [`scripts/seed_mcdonalds_dataset.py`](scripts/seed_mcdonalds_dataset.py) |
 
 ---
 
-## 🧪 Comprehensive Verification Suite
+## 🚀 Key Feature Workspaces
 
-Run all 13 automated tests:
+### 1. Interactive MQL Aggregation Builder (`Workspace 1`)
+- **Borough Restaurant Analytics:** Uses `$match` and `$group` to aggregate restaurant density, average customer review ratings, and seating capacities across Manhattan, Brooklyn, Queens, Bronx, and Staten Island.
+- **Menu Array Unwinding:** Uses `$unwind` on the embedded menu items array, allowing category pricing distributions and price bounds (`$min`, `$max`, `$avg`) without schema changes.
+- **Relational NoSQL Join:** `$lookup` connects `orders` with `accounts` based on `user_id` to perform left outer joins.
+- **Multi-Faceted Categorization:** `$facet` processes regional revenue, payment method breakdowns, and order fulfillment distributions in a single pass.
+
+### 2. Index Profiler: COLLSCAN vs IXSCAN (`Workspace 2`)
+- Measures exact execution time in milliseconds.
+- Tracks `docs_examined` vs `docs_returned` ratios.
+- Provides visual millisecond latency bars demonstrating $O(1)$ / $O(\log N)$ B-Tree performance vs $O(N)$ full table scans.
+
+### 3. Multi-Document ACID Transactions (`Workspace 3`)
+- Simulates real-time banking transfers between user accounts.
+- **Commit Scenario:** Deducts amount from source account, credits destination account, and commits transaction audit log atomically.
+- **Rollback Scenario:** Injects mid-transaction network failures to trigger deterministic rollback, restoring original account balances with zero data leakage.
+
+### 4. Polyglot Persistence Benchmark (`Workspace 4`)
+- Real-time side-by-side benchmark matrix measuring:
+  1. Point query by indexed ID (`SELECT ... WHERE id = ?` vs `findOne({ _id: ... })`).
+  2. Categorical multi-dimension group by (`GROUP BY` vs `$match` + `$group`).
+  3. Relational multi-table join vs embedded document read (`JOIN` vs embedded BSON array).
+  4. Batch document ingestion throughput (50 records).
+
+### 5. CLA-2 Academic Evaluation Report Exporter (`Workspace 5`)
+- One-click generation of publication-grade Markdown reports containing query syntax, execution stats, output screenshots, and observations formatted for university evaluation.
+
+---
+
+## 🛠️ Quick Start Guide
+
+### 1. Environment Setup & Installation
 ```bash
-PYTHONPATH=. pytest tests/ -v
+git clone https://github.com/chsushen/mongopolyglot-enterprise.git
+cd mongopolyglot-enterprise
+
+# Create and activate virtual environment
+python3 -m venv .venv
+source .venv/bin/activate
+
+# Install dependencies
+pip install -r requirements.txt
+```
+
+### 2. Dataset Seeding
+```bash
+# Seed 150+ NYC restaurants with coordinates, inspection grades, and menus
+python scripts/seed_mcdonalds_dataset.py
+
+# Seed E-Commerce datasets (users, accounts, products, orders)
+python scripts/seed_ecommerce_dataset.py
+```
+
+### 3. Launch Server
+```bash
+uvicorn backend.app.main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+---
+
+## 🧪 Comprehensive Automated Test Verification
+
+Execute all 13 unit, integration, and API test suites:
+```bash
+pytest tests/ -v
 ```
 
 ```
-======================== 13 passed, 1 warning in 0.63s =========================
+============================= test session starts ==============================
 tests/test_aggregations.py::test_match_group_sort_aggregation PASSED     [  7%]
 tests/test_aggregations.py::test_unwind_aggregation PASSED               [ 15%]
 tests/test_aggregations.py::test_facet_aggregation PASSED                [ 23%]
@@ -90,18 +134,26 @@ tests/test_crud.py::test_crud_lifecycle PASSED                           [ 76%]
 tests/test_transactions.py::test_transaction_commit_success PASSED       [ 84%]
 tests/test_transactions.py::test_transaction_rollback_on_failure PASSED  [ 92%]
 tests/test_transactions.py::test_transaction_insufficient_funds PASSED   [100%]
+
+======================== 13 passed, 1 warning in 0.63s =========================
 ```
 
 ---
 
-## 🌐 Quick Start Guide
+## 🌐 Live Service Endpoints
 
-### 1. Launch Server
-```bash
-uvicorn backend.app.main:app --host 0.0.0.0 --port 8000 --reload
-```
+| Endpoint | Method | Purpose |
+| :--- | :---: | :--- |
+| `/dashboard` | `GET` | Dark-Mode Mission Control Console (5 Workspaces) |
+| `/docs` | `GET` | FastAPI Interactive Swagger UI Documentation |
+| `/api/v1/aggregations/presets` | `GET` | Fetch 21CSE562T MQL pipeline presets |
+| `/api/v1/aggregations/run` | `POST` | Execute custom MongoDB aggregation pipeline |
+| `/api/v1/transactions/transfer`| `POST` | Execute or abort multi-document ACID transfer |
+| `/api/v1/indexes/profile` | `POST` | Profile query: COLLSCAN vs IXSCAN executionStats |
+| `/api/v1/benchmark/run` | `GET` | Run live SQL vs NoSQL latency benchmark |
+| `/api/v1/academic/generate-report` | `POST` | Generate publication-grade CLA-2 Markdown report |
 
-### 2. Access Mission Control Dashboard
-- **Web UI:** [http://127.0.0.1:8000/dashboard](http://127.0.0.1:8000/dashboard)
-- **FastAPI Interactive API Docs:** [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
-- **CLA-2 Report Endpoint:** `POST http://127.0.0.1:8000/api/v1/academic/generate-report`
+---
+
+## 📄 License
+MIT License. Developed for Academic Assessment and Enterprise Polyglot Systems Engineering.
