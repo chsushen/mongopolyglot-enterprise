@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from .core.config import settings
 from .core.db_mongo import mongo_manager
 from .core.db_mysql import sql_manager
@@ -62,6 +62,16 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request, exc: Exception):
+    logger.exception("Global exception intercepted: %s", exc)
+    return JSONResponse(
+        status_code=500,
+        content={"success": False, "status_code": 500, "error": "Internal Server Error", "detail": str(exc)},
+    )
+
 
 app.include_router(api_router, prefix=settings.API_V1_STR)
 

@@ -1,15 +1,24 @@
-# 🍃 MongoPolyglot Enterprise
+# MongoPolyglot Enterprise
 
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.110+-009688.svg?style=flat&logo=fastapi)](https://fastapi.tiangolo.com)
-[![MongoDB](https://img.shields.io/badge/MongoDB-5.0%2B%20%7C%206.0%2B%20%7C%207.0%2B-47A248.svg?style=flat&logo=mongodb)](https://www.mongodb.com/)
-[![Motor](https://img.shields.io/badge/Motor-AsyncIO_Driver-13AA52.svg)](https://motor.readthedocs.io/)
+[![MongoDB](https://img.shields.io/badge/MongoDB-6.0%2B%20%7C%207.0%2B-47A248.svg?style=flat&logo=mongodb)](https://www.mongodb.com/)
+[![Motor](https://img.shields.io/badge/Motor-3.3+-13AA52.svg)](https://motor.readthedocs.io/)
 [![SQLite/MySQL](https://img.shields.io/badge/RDBMS-SQL_Polyglot-003B57.svg?logo=sqlite)](https://sqlite.org)
-[![Syllabus](https://img.shields.io/badge/Syllabus-21CSE562T%20(CLA--2)-8B5CF6.svg)](https://www.srmist.edu.in)
 [![Tests](https://img.shields.io/badge/Tests-13%2F13%20PASSED-10B981.svg)]()
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-> **Enterprise MongoDB & SQL Polyglot Database Platform with Aggregation Pipelines, Performance Profiling, and ACID Transactions.**  
-> Purpose-built for **Units 4 & 5 of the 21CSE562T syllabus (SQL and NoSQL for Data Science — Continuous Learning Assessment CLA-2)**.
+**MongoPolyglot Enterprise** is a dual-engine database engineering platform designed for exploring polyglot persistence, advanced MongoDB aggregation pipelines, index latency profiling, and multi-document ACID transactions. 
+
+The project specifically implements and validates all practical learning outcomes for **Units 4 & 5 of the 21CSE562T syllabus (SQL and NoSQL for Data Science)** at SRM Institute of Science and Technology.
+
+---
+
+## 👨‍💻 Author & Academic Attribution
+
+- **Author:** **Chunduri Sushen**
+- **Program:** M.Tech in Data Science
+- **Institution:** SRM Institute of Science and Technology, Kattankulathur
+- **Course:** 21CSE562T — SQL and NoSQL for Data Science (Continuous Learning Assessment CLA-2)
 
 ---
 
@@ -36,11 +45,30 @@
                                               - Evaluator Rubric Verification
 ```
 
+The system employs an asynchronous architecture built on **FastAPI** with two parallel data engines:
+1. **Document Store (BSON):** MongoDB accessed via the non-blocking `Motor` AsyncIO driver (with automated in-process mock fallback for self-contained, zero-dependency local testing).
+2. **Relational Store (SQL):** Mirrored schema executed asynchronously using `aiosqlite` with normalized 3NF tables.
+
 ---
 
-## 🎯 Direct Academic Alignment to 21CSE562T (Units 4 & 5)
+## ⚖️ Real-World Architectural Tradeoffs
 
-| Syllabus Topic | Practical Realization in MongoPolyglot Enterprise | Source Implementation |
+### 1. Embedded Documents vs. Normalized Relational Joins
+* **When to Embed (MongoDB):** Entities with a 1:1 or bounded 1:Few relationship (such as items within an order or coordinates within a restaurant) benefit significantly from embedding. Because the child entities reside inside the parent's contiguous disk block, reads require a single sequential I/O operation ($\mathcal{O}(1)$ page seek) rather than expensive multi-table joins.
+* **When to Normalize (RDBMS):** Unbounded relationships (e.g., millions of logs associated with a single account) or entities requiring independent lifecycle management risk exceeding MongoDB's 16MB BSON document limit. Here, 3NF relational normalization with indexed foreign keys prevents document bloat and write amplification.
+
+### 2. Index Overhead vs. Read Performance
+* **Query Latency ($O(\log N)$ vs $O(N)$):** B-Tree indexes (`IXSCAN`) drastically reduce execution latency by limiting scans to relevant leaf pages. In our McDonald's NYC dataset (150+ locations across 5 boroughs), indexing borough fields reduced scanned documents from 150 (`COLLSCAN`) down to matching rows (e.g., 42).
+* **Write Penalty:** Every secondary index must be updated synchronously on write (`insert`, `update`, `delete`). On high-throughput ingestion pipelines, unneeded indexes induce significant write latency and cache churn.
+
+### 3. ACID Transactions in Distributed NoSQL
+* **Session Overhead:** While MongoDB supports multi-document transactions using replica set WiredTiger snapshots, transactions incur locking overhead and write contention. The platform demonstrates atomic two-phase transfers with deterministic rollback compensation upon network partition or hardware failure.
+
+---
+
+## 🎯 21CSE562T Syllabus Coverage (Units 4 & 5)
+
+| Syllabus Component | Practical Realization in MongoPolyglot Enterprise | Source Implementation |
 | :--- | :--- | :--- |
 | **Unit 4: Advanced CRUD** | Full BSON CRUD operations with typed schemas and pagination | [`backend/app/engine/crud_manager.py`](backend/app/engine/crud_manager.py) |
 | **Unit 4: Document Transactions** | Multi-document ACID session transfers with atomic commit & rollback | [`backend/app/engine/crud_manager.py`](backend/app/engine/crud_manager.py) |
@@ -51,39 +79,14 @@
 
 ---
 
-## 🚀 Key Feature Workspaces
+## 🚀 Quick Start Guide
 
-### 1. Interactive MQL Aggregation Builder (`Workspace 1`)
-- **Borough Restaurant Analytics:** Uses `$match` and `$group` to aggregate restaurant density, average customer review ratings, and seating capacities across Manhattan, Brooklyn, Queens, Bronx, and Staten Island.
-- **Menu Array Unwinding:** Uses `$unwind` on the embedded menu items array, allowing category pricing distributions and price bounds (`$min`, `$max`, `$avg`) without schema changes.
-- **Relational NoSQL Join:** `$lookup` connects `orders` with `accounts` based on `user_id` to perform left outer joins.
-- **Multi-Faceted Categorization:** `$facet` processes regional revenue, payment method breakdowns, and order fulfillment distributions in a single pass.
+### Prerequisites
+* Python 3.11+
+* (Optional) Docker and Docker Compose
+* (Optional) Local MongoDB 6.0+ instance (system defaults to in-memory sandbox if none detected)
 
-### 2. Index Profiler: COLLSCAN vs IXSCAN (`Workspace 2`)
-- Measures exact execution time in milliseconds.
-- Tracks `docs_examined` vs `docs_returned` ratios.
-- Provides visual millisecond latency bars demonstrating $O(1)$ / $O(\log N)$ B-Tree performance vs $O(N)$ full table scans.
-
-### 3. Multi-Document ACID Transactions (`Workspace 3`)
-- Simulates real-time banking transfers between user accounts.
-- **Commit Scenario:** Deducts amount from source account, credits destination account, and commits transaction audit log atomically.
-- **Rollback Scenario:** Injects mid-transaction network failures to trigger deterministic rollback, restoring original account balances with zero data leakage.
-
-### 4. Polyglot Persistence Benchmark (`Workspace 4`)
-- Real-time side-by-side benchmark matrix measuring:
-  1. Point query by indexed ID (`SELECT ... WHERE id = ?` vs `findOne({ _id: ... })`).
-  2. Categorical multi-dimension group by (`GROUP BY` vs `$match` + `$group`).
-  3. Relational multi-table join vs embedded document read (`JOIN` vs embedded BSON array).
-  4. Batch document ingestion throughput (50 records).
-
-### 5. CLA-2 Academic Evaluation Report Exporter (`Workspace 5`)
-- One-click generation of publication-grade Markdown reports containing query syntax, execution stats, output screenshots, and observations formatted for university evaluation.
-
----
-
-## 🛠️ Quick Start Guide
-
-### 1. Environment Setup & Installation
+### 1. Clone & Setup
 ```bash
 git clone https://github.com/chsushen/mongopolyglot-enterprise.git
 cd mongopolyglot-enterprise
@@ -92,34 +95,57 @@ cd mongopolyglot-enterprise
 python3 -m venv .venv
 source .venv/bin/activate
 
-# Install dependencies
-pip install -r requirements.txt
+# Install dependencies via Makefile or pip
+make install
+# or: pip install -r requirements.txt
 ```
 
-### 2. Dataset Seeding
+### 2. Configure Environment
 ```bash
-# Seed 150+ NYC restaurants with coordinates, inspection grades, and menus
-python scripts/seed_mcdonalds_dataset.py
-
-# Seed E-Commerce datasets (users, accounts, products, orders)
-python scripts/seed_ecommerce_dataset.py
+cp .env.example .env
 ```
 
-### 3. Launch Server
+### 3. Seed Datasets
 ```bash
-uvicorn backend.app.main:app --host 0.0.0.0 --port 8000 --reload
+make seed
+# Seeds 150+ NYC restaurants with coordinates, inspection grades, and menus
+# Seeds E-Commerce accounts, products, and multi-item orders
+```
+
+### 4. Run the Application
+```bash
+make run
+# Starts server at http://127.0.0.1:8000
+```
+
+* **Web UI Dashboard:** [http://127.0.0.1:8000/dashboard](http://127.0.0.1:8000/dashboard)
+* **API Documentation (Swagger):** [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
+
+---
+
+## 🐳 Docker Deployment
+
+To spin up the entire platform (FastAPI + MongoDB 7.0) in containers:
+```bash
+make docker-up
+# Runs both services with persistent named volumes
+```
+
+To stop containers:
+```bash
+make docker-down
 ```
 
 ---
 
-## 🧪 Comprehensive Automated Test Verification
+## 🧪 Test Suite & Quality Assurance
 
-Execute all 13 unit, integration, and API test suites:
+Run the complete test suite:
 ```bash
-pytest tests/ -v
+make test
 ```
 
-```
+```text
 ============================= test session starts ==============================
 tests/test_aggregations.py::test_match_group_sort_aggregation PASSED     [  7%]
 tests/test_aggregations.py::test_unwind_aggregation PASSED               [ 15%]
@@ -135,25 +161,18 @@ tests/test_transactions.py::test_transaction_commit_success PASSED       [ 84%]
 tests/test_transactions.py::test_transaction_rollback_on_failure PASSED  [ 92%]
 tests/test_transactions.py::test_transaction_insufficient_funds PASSED   [100%]
 
-======================== 13 passed, 1 warning in 0.63s =========================
+======================== 13 passed, 1 warning in 0.60s =========================
 ```
 
 ---
 
-## 🌐 Live Service Endpoints
+## 📑 Pre-compiled Academic Reports
 
-| Endpoint | Method | Purpose |
-| :--- | :---: | :--- |
-| `/dashboard` | `GET` | Dark-Mode Mission Control Console (5 Workspaces) |
-| `/docs` | `GET` | FastAPI Interactive Swagger UI Documentation |
-| `/api/v1/aggregations/presets` | `GET` | Fetch 21CSE562T MQL pipeline presets |
-| `/api/v1/aggregations/run` | `POST` | Execute custom MongoDB aggregation pipeline |
-| `/api/v1/transactions/transfer`| `POST` | Execute or abort multi-document ACID transfer |
-| `/api/v1/indexes/profile` | `POST` | Profile query: COLLSCAN vs IXSCAN executionStats |
-| `/api/v1/benchmark/run` | `GET` | Run live SQL vs NoSQL latency benchmark |
-| `/api/v1/academic/generate-report` | `POST` | Generate publication-grade CLA-2 Markdown report |
+Static evaluation reports for course evaluation:
+* **Markdown Report:** [`docs/CLA2_ACADEMIC_EVALUATION_REPORT.md`](docs/CLA2_ACADEMIC_EVALUATION_REPORT.md)
+* **Print-Ready HTML Report:** [`docs/CLA2_ACADEMIC_EVALUATION_REPORT.html`](docs/CLA2_ACADEMIC_EVALUATION_REPORT.html)
 
 ---
 
 ## 📄 License
-MIT License. Developed for Academic Assessment and Enterprise Polyglot Systems Engineering.
+This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.

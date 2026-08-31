@@ -5,9 +5,12 @@ Generates users, accounts, products, orders, and inventory for ACID transactions
 """
 
 import asyncio
+import logging
 import random
 from datetime import datetime, timedelta
 from typing import List, Dict, Any
+
+logger = logging.getLogger(__name__)
 
 CATEGORIES = ["Electronics", "Apparel", "Home & Kitchen", "Books", "Beauty"]
 REGIONS = ["US-EAST", "US-WEST", "APAC", "EMEA"]
@@ -163,7 +166,10 @@ async def seed_ecommerce_data(mongo_db, sql_mgr):
             (it["item_id"], it["order_id"], it["product_id"], it["quantity"], it["unit_price"])
         )
 
-    print(f"✅ Successfully seeded E-Commerce datasets ({len(users)} users, {len(accounts)} accounts, {len(products)} products, {len(orders)} orders) into MongoDB & SQL.")
+    logger.info(
+        "Successfully seeded E-Commerce datasets (%d users, %d accounts, %d products, %d orders) into MongoDB & SQL.",
+        len(users), len(accounts), len(products), len(orders)
+    )
 
 
 if __name__ == "__main__":

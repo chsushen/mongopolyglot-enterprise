@@ -5,9 +5,12 @@ Generates NYC restaurants across 5 boroughs with geospatial coordinates, grades,
 """
 
 import asyncio
+import logging
 import random
 from datetime import datetime, timedelta
 from typing import List, Dict, Any
+
+logger = logging.getLogger(__name__)
 
 BOROUGHS = ["Manhattan", "Brooklyn", "Queens", "Bronx", "Staten Island"]
 CUISINES = ["Hamburgers", "Fast Food", "American", "Cafe/Coffee/Tea"]
@@ -122,7 +125,7 @@ async def seed_restaurants_data(mongo_db, sql_mgr, count: int = 150):
             )
         )
 
-    print(f"✅ Successfully seeded {len(restaurants)} restaurants into MongoDB 'restaurants_mcdonalds' and SQL 'restaurants'.")
+    logger.info("Successfully seeded %d restaurants into MongoDB 'restaurants_mcdonalds' and SQL 'restaurants'.", len(restaurants))
 
 
 if __name__ == "__main__":
