@@ -1,0 +1,797 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MongoPolyglot Enterprise | 21CSE562T Mission Control</title>
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              400: '#34D399',
+              500: '#10B981',
+              600: '#059669',
+            },
+            surface: {
+              900: '#090D16',
+              850: '#0E1726',
+              800: '#1A2333',
+              700: '#2A364F',
+            }
+          },
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'monospace'],
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <!-- FontAwesome 6 -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+
+  <style>
+    body {
+      background-color: #06090F;
+      color: #F8FAFC;
+      font-family: 'Inter', sans-serif;
+    }
+    .font-mono {
+      font-family: 'JetBrains Mono', monospace;
+    }
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #090D16;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #2A364F;
+      border-radius: 3px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #3B4B6E;
+    }
+    .glass-panel {
+      background: rgba(14, 23, 38, 0.88);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(42, 54, 79, 0.7);
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col antialiased selection:bg-emerald-500 selection:text-white">
+
+  <!-- Top Navigation Header -->
+  <header class="border-b border-slate-800 bg-surface-900/90 backdrop-blur sticky top-0 z-50 px-6 py-3.5 flex items-center justify-between">
+    <div class="flex items-center space-x-3.5">
+      <div class="w-9 h-9 rounded-lg bg-gradient-to-tr from-emerald-600 to-teal-500 flex items-center justify-center text-white font-black shadow-lg shadow-emerald-500/20">
+        <i class="fa-solid fa-leaf text-lg"></i>
+      </div>
+      <div>
+        <div class="flex items-center space-x-2.5">
+          <h1 class="text-lg font-bold text-white tracking-tight">MongoPolyglot Enterprise</h1>
+          <span class="px-2 py-0.5 rounded text-[10px] font-bold font-mono uppercase bg-emerald-950 text-emerald-400 border border-emerald-800/80">21CSE562T</span>
+          <span class="px-2 py-0.5 rounded text-[10px] font-bold font-mono uppercase bg-blue-950 text-blue-400 border border-blue-800/80">CLA-2 Compliant</span>
+        </div>
+        <p class="text-xs text-slate-400">MongoDB Aggregation Pipelines, Performance Profiling & ACID Transactions</p>
+      </div>
+    </div>
+
+    <!-- Active Workspace Tabs -->
+    <div class="flex items-center bg-slate-900/90 p-1 rounded-lg border border-slate-800 text-xs">
+      <button onclick="switchWorkspace('aggregations')" id="tab-btn-aggregations" class="px-3 py-1.5 rounded-md font-semibold text-emerald-400 bg-surface-800 transition flex items-center gap-1.5">
+        <i class="fa-solid fa-layer-group text-xs"></i> 1. Aggregations
+      </button>
+      <button onclick="switchWorkspace('profiler')" id="tab-btn-profiler" class="px-3 py-1.5 rounded-md font-semibold text-slate-400 hover:text-slate-200 transition flex items-center gap-1.5">
+        <i class="fa-solid fa-bolt text-xs"></i> 2. Index Profiler
+      </button>
+      <button onclick="switchWorkspace('transactions')" id="tab-btn-transactions" class="px-3 py-1.5 rounded-md font-semibold text-slate-400 hover:text-slate-200 transition flex items-center gap-1.5">
+        <i class="fa-solid fa-shield-halved text-xs"></i> 3. ACID Transactions
+      </button>
+      <button onclick="switchWorkspace('benchmark')" id="tab-btn-benchmark" class="px-3 py-1.5 rounded-md font-semibold text-slate-400 hover:text-slate-200 transition flex items-center gap-1.5">
+        <i class="fa-solid fa-scale-balanced text-xs"></i> 4. Polyglot Benchmarks
+      </button>
+      <button onclick="switchWorkspace('report')" id="tab-btn-report" class="px-3 py-1.5 rounded-md font-semibold text-slate-400 hover:text-slate-200 transition flex items-center gap-1.5">
+        <i class="fa-solid fa-file-contract text-xs"></i> 5. CLA-2 Report
+      </button>
+    </div>
+  </header>
+
+  <!-- Main Content Container -->
+  <main class="flex-1 p-6 max-w-[1920px] mx-auto w-full">
+
+    <!-- ================================================================= -->
+    <!-- WORKSPACE 1: Aggregation Pipelines Builder & Runner -->
+    <!-- ================================================================= -->
+    <div id="ws-aggregations" class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      <!-- Left Panel: Presets & Pipeline Editor -->
+      <div class="lg:col-span-5 flex flex-col gap-5">
+        <div class="glass-panel rounded-xl p-5 shadow-xl">
+          <div class="flex items-center justify-between mb-3">
+            <h2 class="text-sm font-bold uppercase tracking-wider text-slate-200 flex items-center gap-2">
+              <i class="fa-solid fa-sliders text-emerald-400"></i> Syllabus Pipeline Presets
+            </h2>
+            <span class="text-[11px] font-mono text-slate-400">Unit 4: Advanced MQL</span>
+          </div>
+
+          <div class="space-y-2 mb-4">
+            <button onclick="loadPreset('borough_performance')" class="w-full text-left p-2.5 rounded-lg bg-surface-900 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 text-xs transition">
+              <div class="font-bold text-emerald-400">$match, $group, $sort</div>
+              <div class="text-slate-400 text-[11px]">Borough Restaurant Performance & Avg Rating</div>
+            </button>
+            <button onclick="loadPreset('menu_unwind_analysis')" class="w-full text-left p-2.5 rounded-lg bg-surface-900 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 text-xs transition">
+              <div class="font-bold text-teal-400">$unwind, $group, $project</div>
+              <div class="text-slate-400 text-[11px]">Menu Category Pricing & Array Flattening</div>
+            </button>
+            <button onclick="loadPreset('orders_users_lookup')" class="w-full text-left p-2.5 rounded-lg bg-surface-900 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 text-xs transition">
+              <div class="font-bold text-cyan-400">$lookup (NoSQL Left Outer Join)</div>
+              <div class="text-slate-400 text-[11px]">Enrich Orders with User Account Balances</div>
+            </button>
+            <button onclick="loadPreset('faceted_ecommerce_dashboard')" class="w-full text-left p-2.5 rounded-lg bg-surface-900 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 text-xs transition">
+              <div class="font-bold text-purple-400">$facet (Multi-Faceted Analytics)</div>
+              <div class="text-slate-400 text-[11px]">Simultaneous Region, Payment & Status Dimensions</div>
+            </button>
+          </div>
+
+          <!-- JSON Pipeline Editor -->
+          <div class="flex items-center justify-between mb-2">
+            <label class="text-xs font-semibold text-slate-300">Pipeline Stages (JSON):</label>
+            <div class="flex items-center gap-2">
+              <span class="text-[11px] font-mono text-slate-400">Collection:</span>
+              <select id="agg-collection" class="bg-surface-900 border border-slate-700 rounded px-2 py-0.5 text-xs text-slate-200 font-mono">
+                <option value="restaurants_mcdonalds">restaurants_mcdonalds</option>
+                <option value="orders">orders</option>
+                <option value="products">products</option>
+                <option value="accounts">accounts</option>
+              </select>
+            </div>
+          </div>
+
+          <textarea id="agg-pipeline-editor" rows="9" class="w-full bg-surface-900 border border-slate-700 rounded-lg p-3 text-xs font-mono text-emerald-300 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition resize-none"></textarea>
+
+          <div class="mt-3 flex items-center justify-between">
+            <span id="agg-exec-badge" class="text-[11px] font-mono text-slate-400">Ready</span>
+            <button onclick="executeCustomPipeline()" id="agg-run-btn" class="px-4 py-2 rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-semibold text-xs transition shadow-lg shadow-emerald-500/20 flex items-center gap-2">
+              <i class="fa-solid fa-play text-[10px]"></i> Execute Pipeline
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Panel: Output & Visual Aggregation Breakdown -->
+      <div class="lg:col-span-7 flex flex-col gap-5">
+        <div class="glass-panel rounded-xl p-5 shadow-xl flex-1 flex flex-col">
+          <div class="flex items-center justify-between mb-3 border-b border-slate-800 pb-3">
+            <div>
+              <h2 class="text-sm font-bold uppercase tracking-wider text-slate-200 flex items-center gap-2">
+                <i class="fa-solid fa-table-cells text-cyan-400"></i> Pipeline Execution Results
+              </h2>
+              <p id="agg-active-desc" class="text-xs text-slate-400 mt-0.5">Select a preset or execute a custom pipeline.</p>
+            </div>
+            <div class="flex items-center space-x-3 text-xs font-mono">
+              <span class="text-slate-400">Latency: <strong id="agg-latency" class="text-emerald-400">0.00 ms</strong></span>
+              <span class="text-slate-400">Count: <strong id="agg-count" class="text-cyan-400">0</strong></span>
+            </div>
+          </div>
+
+          <!-- Results Container -->
+          <div class="flex-1 overflow-x-auto border border-slate-800 rounded-lg bg-surface-900 max-h-[500px]">
+            <table class="w-full text-left text-xs font-mono">
+              <thead id="agg-table-head" class="bg-slate-900 border-b border-slate-800 text-slate-400 sticky top-0"></thead>
+              <tbody id="agg-table-body" class="divide-y divide-slate-800 text-slate-200">
+                <tr><td class="p-6 text-center text-slate-500">Run an aggregation to view records</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================================================================= -->
+    <!-- WORKSPACE 2: Indexing & Query Profiler (COLLSCAN vs IXSCAN) -->
+    <!-- ================================================================= -->
+    <div id="ws-profiler" class="hidden grid grid-cols-1 lg:grid-cols-12 gap-6">
+      <div class="lg:col-span-5 flex flex-col gap-5">
+        <div class="glass-panel rounded-xl p-5 shadow-xl">
+          <div class="flex items-center justify-between mb-3">
+            <h2 class="text-sm font-bold uppercase tracking-wider text-slate-200 flex items-center gap-2">
+              <i class="fa-solid fa-magnifying-glass-chart text-amber-400"></i> Query Profiler Parameters
+            </h2>
+            <span class="text-[11px] font-mono text-slate-400">Unit 4: Indexes & Explain</span>
+          </div>
+
+          <div class="space-y-3.5 mb-4 text-xs">
+            <div>
+              <label class="font-semibold text-slate-300 block mb-1">Target Collection:</label>
+              <input type="text" id="idx-coll" value="restaurants_mcdonalds" class="w-full bg-surface-900 border border-slate-700 rounded p-2 text-xs font-mono text-slate-200" readonly>
+            </div>
+            <div>
+              <label class="font-semibold text-slate-300 block mb-1">Indexed Target Field:</label>
+              <select id="idx-field" class="w-full bg-surface-900 border border-slate-700 rounded p-2 text-xs font-mono text-slate-200">
+                <option value="borough">borough (Single Field Index)</option>
+                <option value="cuisine">cuisine (Single Field Index)</option>
+                <option value="avg_rating">avg_rating (Numeric Range Index)</option>
+                <option value="address.zipcode">address.zipcode (Embedded Subdocument Index)</option>
+              </select>
+            </div>
+            <div>
+              <label class="font-semibold text-slate-300 block mb-1">Query Filter Specification (JSON):</label>
+              <textarea id="idx-query" rows="3" class="w-full bg-surface-900 border border-slate-700 rounded p-2 text-xs font-mono text-amber-300">{ "borough": "Manhattan" }</textarea>
+            </div>
+          </div>
+
+          <button onclick="runIndexProfiling()" id="idx-profile-btn" class="w-full py-2.5 rounded-lg bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white font-semibold text-xs transition shadow-lg shadow-amber-500/20 flex items-center justify-center gap-2">
+            <i class="fa-solid fa-gauge-high"></i> Benchmark COLLSCAN vs IXSCAN
+          </button>
+        </div>
+
+        <!-- Existing Collection Indexes -->
+        <div class="glass-panel rounded-xl p-5 shadow-xl">
+          <h3 class="text-xs font-bold uppercase tracking-wider text-slate-300 mb-3 flex items-center justify-between">
+            <span>Active Collection Indexes</span>
+            <button onclick="refreshIndexes()" class="text-slate-400 hover:text-white text-[11px]"><i class="fa-solid fa-arrows-rotate"></i></button>
+          </h3>
+          <div id="active-indexes-list" class="space-y-2 text-xs font-mono">
+            <div class="text-slate-500">Loading indexes...</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Profiler Visualizer -->
+      <div class="lg:col-span-7 flex flex-col gap-5">
+        <div class="glass-panel rounded-xl p-5 shadow-xl flex-1 flex flex-col">
+          <div class="flex items-center justify-between mb-4 border-b border-slate-800 pb-3">
+            <h2 class="text-sm font-bold uppercase tracking-wider text-slate-200 flex items-center gap-2">
+              <i class="fa-solid fa-chart-column text-amber-400"></i> ExecutionStats Latency Breakdown
+            </h2>
+            <span id="speedup-badge" class="px-2.5 py-1 rounded text-xs font-mono font-bold bg-amber-950 text-amber-300 border border-amber-800">
+              Awaiting Profiling Run
+            </span>
+          </div>
+
+          <!-- Visual Latency Bars -->
+          <div class="space-y-6 my-4 p-4 bg-surface-900 rounded-xl border border-slate-800">
+            <div>
+              <div class="flex justify-between text-xs font-mono mb-1.5">
+                <span class="text-red-400 font-bold flex items-center gap-1.5">
+                  <i class="fa-solid fa-ban"></i> COLLSCAN (Full Collection Table Scan)
+                </span>
+                <span id="collscan-time" class="text-red-300">0.00 ms</span>
+              </div>
+              <div class="w-full bg-slate-800 h-4 rounded-full overflow-hidden">
+                <div id="collscan-bar" class="bg-red-500 h-full rounded-full transition-all duration-700" style="width: 100%"></div>
+              </div>
+              <div class="flex justify-between text-[11px] text-slate-500 font-mono mt-1">
+                <span>Stage: Table Scan</span>
+                <span>Docs Examined: <strong id="collscan-docs" class="text-slate-300">0</strong></span>
+              </div>
+            </div>
+
+            <div>
+              <div class="flex justify-between text-xs font-mono mb-1.5">
+                <span class="text-emerald-400 font-bold flex items-center gap-1.5">
+                  <i class="fa-solid fa-bolt"></i> IXSCAN (B-Tree Indexed Scan)
+                </span>
+                <span id="ixscan-time" class="text-emerald-300">0.00 ms</span>
+              </div>
+              <div class="w-full bg-slate-800 h-4 rounded-full overflow-hidden">
+                <div id="ixscan-bar" class="bg-emerald-500 h-full rounded-full transition-all duration-700" style="width: 18%"></div>
+              </div>
+              <div class="flex justify-between text-[11px] text-slate-500 font-mono mt-1">
+                <span>Stage: B-Tree Scan (<span id="ixscan-name" class="text-emerald-400">index_1</span>)</span>
+                <span>Docs Examined: <strong id="ixscan-docs" class="text-slate-300">0</strong></span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Optimization Recommendation Box -->
+          <div class="p-4 bg-surface-900/80 rounded-xl border border-slate-800 mt-2">
+            <h4 class="text-xs font-bold uppercase text-slate-300 mb-1">Index Profiler Recommendation:</h4>
+            <p id="profiler-rec" class="text-xs text-slate-400 leading-relaxed">
+              Run the profiler to analyze document selectivity and execution stage speedups.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================================================================= -->
+    <!-- WORKSPACE 3: Multi-Document ACID Transaction Console -->
+    <!-- ================================================================= -->
+    <div id="ws-transactions" class="hidden grid grid-cols-1 lg:grid-cols-12 gap-6">
+      <div class="lg:col-span-5 flex flex-col gap-5">
+        <div class="glass-panel rounded-xl p-5 shadow-xl">
+          <div class="flex items-center justify-between mb-3">
+            <h2 class="text-sm font-bold uppercase tracking-wider text-slate-200 flex items-center gap-2">
+              <i class="fa-solid fa-money-bill-transfer text-blue-400"></i> ACID Banking Transfer
+            </h2>
+            <span class="text-[11px] font-mono text-slate-400">Unit 4: Multi-Doc Atomicity</span>
+          </div>
+
+          <div class="space-y-3 text-xs mb-4">
+            <div>
+              <label class="font-semibold text-slate-300 block mb-1">Source Account ID (Debit):</label>
+              <input type="text" id="tx-from" value="ACC-0001" class="w-full bg-surface-900 border border-slate-700 rounded p-2 text-xs font-mono text-slate-200">
+            </div>
+            <div>
+              <label class="font-semibold text-slate-300 block mb-1">Destination Account ID (Credit):</label>
+              <input type="text" id="tx-to" value="ACC-0002" class="w-full bg-surface-900 border border-slate-700 rounded p-2 text-xs font-mono text-slate-200">
+            </div>
+            <div>
+              <label class="font-semibold text-slate-300 block mb-1">Transfer Amount (USD):</label>
+              <input type="number" id="tx-amount" value="150.00" step="10" class="w-full bg-surface-900 border border-slate-700 rounded p-2 text-xs font-mono text-emerald-400 font-bold">
+            </div>
+            <div class="pt-2">
+              <label class="flex items-center space-x-2 text-slate-300 cursor-pointer">
+                <input type="checkbox" id="tx-fail-toggle" class="rounded border-slate-700 bg-slate-900 text-red-500 focus:ring-0">
+                <span class="text-red-400 font-semibold">Simulate Mid-Transaction Network Crash (Trigger Rollback)</span>
+              </label>
+            </div>
+          </div>
+
+          <button onclick="executeTransaction()" id="tx-btn" class="w-full py-2.5 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-semibold text-xs transition shadow-lg shadow-blue-500/20 flex items-center justify-center gap-2">
+            <i class="fa-solid fa-play text-[10px]"></i> Execute ACID Transaction
+          </button>
+        </div>
+
+        <!-- Live Accounts Peek -->
+        <div class="glass-panel rounded-xl p-5 shadow-xl">
+          <h3 class="text-xs font-bold uppercase tracking-wider text-slate-300 mb-3 flex items-center justify-between">
+            <span>Live Account Balances</span>
+            <button onclick="refreshAccounts()" class="text-slate-400 hover:text-white text-[11px]"><i class="fa-solid fa-arrows-rotate"></i></button>
+          </h3>
+          <div id="accounts-peek-list" class="space-y-1.5 text-xs font-mono">
+            <div class="text-slate-500">Loading accounts...</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Transaction Event Trail -->
+      <div class="lg:col-span-7 flex flex-col gap-5">
+        <div class="glass-panel rounded-xl p-5 shadow-xl flex-1 flex flex-col">
+          <div class="flex items-center justify-between mb-4 border-b border-slate-800 pb-3">
+            <h2 class="text-sm font-bold uppercase tracking-wider text-slate-200 flex items-center gap-2">
+              <i class="fa-solid fa-receipt text-blue-400"></i> Transaction Session Lifecycle & Audit Trail
+            </h2>
+            <span id="tx-status-badge" class="px-2.5 py-1 rounded text-xs font-mono font-bold bg-slate-800 text-slate-400 border border-slate-700">
+              Ready
+            </span>
+          </div>
+
+          <div id="tx-event-logs" class="flex-1 bg-surface-900 border border-slate-800 rounded-xl p-4 font-mono text-xs space-y-2 overflow-y-auto max-h-[460px]">
+            <div class="text-slate-500">[SESSION READY] Execute a transaction to observe two-phase commit or deterministic rollback.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================================================================= -->
+    <!-- WORKSPACE 4: RDBMS (SQL) vs MongoDB (NoSQL) Latency Benchmarks -->
+    <!-- ================================================================= -->
+    <div id="ws-benchmark" class="hidden flex flex-col gap-6">
+      <div class="glass-panel rounded-xl p-5 shadow-xl">
+        <div class="flex items-center justify-between mb-4 border-b border-slate-800 pb-3">
+          <div>
+            <h2 class="text-sm font-bold uppercase tracking-wider text-slate-200 flex items-center gap-2">
+              <i class="fa-solid fa-scale-balanced text-teal-400"></i> Polyglot Persistence Benchmark Suite
+            </h2>
+            <p class="text-xs text-slate-400 mt-0.5">Direct latency comparison: SQLite/MySQL Relational Engine vs MongoDB BSON Engine (Unit 5 Syllabus).</p>
+          </div>
+          <button onclick="runBenchmarkSuite()" id="bench-btn" class="px-4 py-2 rounded-lg bg-gradient-to-r from-teal-600 to-cyan-600 hover:from-teal-500 hover:to-cyan-500 text-white font-semibold text-xs transition shadow-lg shadow-teal-500/20 flex items-center gap-2">
+            <i class="fa-solid fa-gauge-simple-high"></i> Run Benchmark Suite
+          </button>
+        </div>
+
+        <div class="overflow-x-auto border border-slate-800 rounded-lg bg-surface-900">
+          <table class="w-full text-left text-xs font-mono">
+            <thead class="bg-slate-900 border-b border-slate-800 text-slate-400">
+              <tr>
+                <th class="p-3">Scenario</th>
+                <th class="p-3">RDBMS SQL Query</th>
+                <th class="p-3">MongoDB NoSQL Query</th>
+                <th class="p-3 text-right">SQL Latency</th>
+                <th class="p-3 text-right">NoSQL Latency</th>
+                <th class="p-3">Advantage</th>
+              </tr>
+            </thead>
+            <tbody id="bench-table-body" class="divide-y divide-slate-800 text-slate-200">
+              <tr><td colspan="6" class="p-6 text-center text-slate-500">Click 'Run Benchmark Suite' to execute tests</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div id="bench-summary-box" class="mt-4 p-4 bg-surface-900/80 rounded-xl border border-slate-800 hidden">
+          <div class="flex items-center justify-between text-xs">
+            <span class="text-slate-300">Recommended Storage Architecture: <strong id="bench-rec-store" class="text-emerald-400 font-mono">Hybrid Polyglot</strong></span>
+            <span class="text-slate-400 font-mono">Average Speedup: <strong id="bench-speedup" class="text-cyan-400">0x</strong></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================================================================= -->
+    <!-- WORKSPACE 5: CLA-2 Academic Report Exporter -->
+    <!-- ================================================================= -->
+    <div id="ws-report" class="hidden flex flex-col gap-6">
+      <div class="glass-panel rounded-xl p-5 shadow-xl">
+        <div class="flex items-center justify-between mb-4 border-b border-slate-800 pb-3">
+          <div>
+            <h2 class="text-sm font-bold uppercase tracking-wider text-slate-200 flex items-center gap-2">
+              <i class="fa-solid fa-file-contract text-emerald-400"></i> Continuous Learning Assessment (CLA-2) Report Generator
+            </h2>
+            <p class="text-xs text-slate-400 mt-0.5">Automated publication-grade Markdown assessment document covering Units 4 & 5.</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <button onclick="generateReport()" id="report-gen-btn" class="px-4 py-2 rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-semibold text-xs transition shadow-lg shadow-emerald-500/20 flex items-center gap-2">
+              <i class="fa-solid fa-arrows-rotate"></i> Compile Report
+            </button>
+            <button onclick="copyReport()" class="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs border border-slate-700 transition">
+              <i class="fa-regular fa-copy"></i> Copy Markdown
+            </button>
+          </div>
+        </div>
+
+        <pre id="report-markdown-preview" class="p-5 bg-surface-900 border border-slate-800 rounded-xl text-xs font-mono text-slate-300 overflow-x-auto max-h-[600px] leading-relaxed">
+Click "Compile Report" to generate complete academic report.
+        </pre>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Notification Toast -->
+  <div id="toast" class="fixed bottom-5 right-5 px-4 py-2.5 rounded-lg bg-slate-900 border border-slate-700 text-xs font-medium text-white shadow-2xl transition transform translate-y-20 opacity-0 flex items-center gap-2 z-50">
+    <i id="toast-icon" class="fa-solid fa-check text-emerald-400"></i>
+    <span id="toast-msg">Notification</span>
+  </div>
+
+  <!-- Client-Side Dashboard Controller -->
+  <script>
+    let activePresets = {};
+
+    document.addEventListener("DOMContentLoaded", async () => {
+      await fetchPresets();
+      loadPreset('borough_performance');
+      refreshIndexes();
+      refreshAccounts();
+    });
+
+    function switchWorkspace(wsName) {
+      ['aggregations', 'profiler', 'transactions', 'benchmark', 'report'].forEach(id => {
+        document.getElementById(`ws-${id}`).classList.add('hidden');
+        document.getElementById(`tab-btn-${id}`).className = 
+          "px-3 py-1.5 rounded-md font-semibold text-slate-400 hover:text-slate-200 transition flex items-center gap-1.5";
+      });
+
+      document.getElementById(`ws-${wsName}`).classList.remove('hidden');
+      document.getElementById(`tab-btn-${wsName}`).className = 
+        "px-3 py-1.5 rounded-md font-semibold text-emerald-400 bg-surface-800 transition flex items-center gap-1.5";
+
+      if (wsName === 'report') generateReport();
+      if (wsName === 'benchmark') runBenchmarkSuite();
+    }
+
+    // 1. Aggregations Controller
+    async function fetchPresets() {
+      try {
+        const resp = await fetch("/api/v1/aggregations/presets");
+        activePresets = await resp.json();
+      } catch (e) {
+        console.error("Presets fetch error:", e);
+      }
+    }
+
+    function loadPreset(key) {
+      const preset = activePresets[key];
+      if (!preset) return;
+      document.getElementById("agg-collection").value = preset.collection;
+      document.getElementById("agg-pipeline-editor").value = JSON.stringify(preset.pipeline, null, 2);
+      document.getElementById("agg-active-desc").innerText = `${preset.title} — ${preset.description}`;
+      executeCustomPipeline();
+    }
+
+    async function executeCustomPipeline() {
+      const coll = document.getElementById("agg-collection").value;
+      const text = document.getElementById("agg-pipeline-editor").value;
+      const btn = document.getElementById("agg-run-btn");
+
+      let pipeline;
+      try {
+        pipeline = JSON.parse(text);
+      } catch (e) {
+        showToast("Invalid JSON in pipeline editor", "error");
+        return;
+      }
+
+      btn.disabled = true;
+      btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Executing...`;
+
+      try {
+        const resp = await fetch("/api/v1/aggregations/run", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ collection_name: coll, pipeline: pipeline })
+        });
+        const data = await resp.json();
+
+        if (!data.success) throw new Error(data.error || "Execution failed");
+
+        document.getElementById("agg-latency").innerText = `${data.execution_time_ms} ms`;
+        document.getElementById("agg-count").innerText = data.result_count;
+        document.getElementById("agg-exec-badge").innerText = `Stages: ${data.stage_count}`;
+
+        renderTableResults(data.results);
+        showToast("Pipeline executed successfully", "success");
+      } catch (e) {
+        showToast(e.message, "error");
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = `<i class="fa-solid fa-play text-[10px]"></i> Execute Pipeline`;
+      }
+    }
+
+    function renderTableResults(records) {
+      const thead = document.getElementById("agg-table-head");
+      const tbody = document.getElementById("agg-table-body");
+      thead.innerHTML = "";
+      tbody.innerHTML = "";
+
+      if (!records || records.length === 0) {
+        tbody.innerHTML = `<tr><td class="p-6 text-center text-slate-500">No records returned by pipeline</td></tr>`;
+        return;
+      }
+
+      const keys = Object.keys(records[0]);
+      const hr = document.createElement("tr");
+      keys.forEach(k => {
+        const th = document.createElement("th");
+        th.className = "p-2.5 font-semibold text-slate-300";
+        th.innerText = k;
+        hr.appendChild(th);
+      });
+      thead.appendChild(hr);
+
+      records.forEach(row => {
+        const tr = document.createElement("tr");
+        keys.forEach(k => {
+          const td = document.createElement("td");
+          td.className = "p-2.5 text-slate-300";
+          const val = row[k];
+          td.innerText = typeof val === "object" ? JSON.stringify(val) : val;
+          tr.appendChild(td);
+        });
+        tbody.appendChild(tr);
+      });
+    }
+
+    // 2. Index Profiler Controller
+    async function refreshIndexes() {
+      try {
+        const resp = await fetch("/api/v1/indexes/list?collection_name=restaurants_mcdonalds");
+        const data = await resp.json();
+        const list = document.getElementById("active-indexes-list");
+        list.innerHTML = "";
+        data.indexes.forEach(idx => {
+          const div = document.createElement("div");
+          div.className = "flex items-center justify-between p-2 rounded bg-surface-900 border border-slate-800";
+          div.innerHTML = `
+            <span class="text-emerald-400 font-bold">${idx.name}</span>
+            <span class="text-slate-400 text-[11px]">${idx.is_geospatial ? '2dsphere' : 'B-Tree'}</span>
+          `;
+          list.appendChild(div);
+        });
+      } catch (e) {}
+    }
+
+    async function runIndexProfiling() {
+      const coll = document.getElementById("idx-coll").value;
+      const field = document.getElementById("idx-field").value;
+      let query;
+      try {
+        query = JSON.parse(document.getElementById("idx-query").value);
+      } catch (e) {
+        query = { [field]: "Manhattan" };
+      }
+
+      const btn = document.getElementById("idx-profile-btn");
+      btn.disabled = true;
+      btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Profiling...`;
+
+      try {
+        const resp = await fetch("/api/v1/indexes/profile", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ collection_name: coll, query: query, indexed_field: field })
+        });
+        const data = await resp.json();
+
+        document.getElementById("speedup-badge").innerText = `Speedup: ${data.speedup_factor} (${data.efficiency_gain_pct}% faster)`;
+        document.getElementById("collscan-time").innerText = `${data.collscan.execution_time_ms} ms`;
+        document.getElementById("ixscan-time").innerText = `${data.ixscan.execution_time_ms} ms`;
+        document.getElementById("collscan-docs").innerText = data.collscan.docs_examined;
+        document.getElementById("ixscan-docs").innerText = data.ixscan.docs_examined;
+        document.getElementById("ixscan-name").innerText = data.ixscan.index_used;
+        document.getElementById("profiler-rec").innerText = data.recommendation;
+
+        const maxTime = Math.max(data.collscan.execution_time_ms, 0.01);
+        const ixPct = Math.max(5, (data.ixscan.execution_time_ms / maxTime) * 100);
+        document.getElementById("ixscan-bar").style.width = `${ixPct}%`;
+
+        showToast("Index profiling benchmark completed", "success");
+      } catch (e) {
+        showToast(e.message, "error");
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = `<i class="fa-solid fa-gauge-high"></i> Benchmark COLLSCAN vs IXSCAN`;
+      }
+    }
+
+    // 3. ACID Transactions Controller
+    async function refreshAccounts() {
+      try {
+        const resp = await fetch("/api/v1/transactions/accounts?limit=8");
+        const data = await resp.json();
+        const list = document.getElementById("accounts-peek-list");
+        list.innerHTML = "";
+        data.accounts.forEach(acc => {
+          const div = document.createElement("div");
+          div.className = "flex items-center justify-between p-1.5 rounded bg-surface-900 border border-slate-800";
+          div.innerHTML = `
+            <span class="text-slate-300 font-bold">${acc.account_id} (${acc.user_id})</span>
+            <span class="text-emerald-400 font-mono font-semibold">$${acc.balance.toFixed(2)}</span>
+          `;
+          list.appendChild(div);
+        });
+      } catch (e) {}
+    }
+
+    async function executeTransaction() {
+      const fromAcc = document.getElementById("tx-from").value.trim();
+      const toAcc = document.getElementById("tx-to").value.trim();
+      const amt = parseFloat(document.getElementById("tx-amount").value);
+      const fail = document.getElementById("tx-fail-toggle").checked;
+
+      const btn = document.getElementById("tx-btn");
+      btn.disabled = true;
+      btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Executing...`;
+
+      try {
+        const resp = await fetch("/api/v1/transactions/transfer", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            from_account_id: fromAcc,
+            to_account_id: toAcc,
+            amount: amt,
+            simulate_failure: fail
+          })
+        });
+        const data = await resp.json();
+
+        const badge = document.getElementById("tx-status-badge");
+        badge.innerText = data.status;
+        badge.className = data.success 
+          ? "px-2.5 py-1 rounded text-xs font-mono font-bold bg-emerald-950 text-emerald-300 border border-emerald-800"
+          : "px-2.5 py-1 rounded text-xs font-mono font-bold bg-red-950 text-red-300 border border-red-800";
+
+        const logContainer = document.getElementById("tx-event-logs");
+        logContainer.innerHTML = "";
+        data.audit_events.forEach(evt => {
+          const div = document.createElement("div");
+          if (evt.includes("ROLLBACK")) div.className = "text-red-400 font-bold";
+          else if (evt.includes("SUCCESSFUL")) div.className = "text-emerald-400 font-bold";
+          else div.className = "text-slate-300";
+          div.innerText = `> ${evt}`;
+          logContainer.appendChild(div);
+        });
+
+        await refreshAccounts();
+        showToast(data.success ? "Transaction Committed!" : "Transaction Rolled Back!", data.success ? "success" : "error");
+      } catch (e) {
+        showToast(e.message, "error");
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = `<i class="fa-solid fa-play text-[10px]"></i> Execute ACID Transaction`;
+      }
+    }
+
+    // 4. Polyglot Benchmark Controller
+    async function runBenchmarkSuite() {
+      const btn = document.getElementById("bench-btn");
+      btn.disabled = true;
+      btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Benchmarking...`;
+
+      try {
+        const resp = await fetch("/api/v1/benchmark/run");
+        const data = await resp.json();
+        const tbody = document.getElementById("bench-table-body");
+        tbody.innerHTML = "";
+
+        data.benchmarks.forEach(b => {
+          const tr = document.createElement("tr");
+          tr.className = "hover:bg-slate-800/40";
+          tr.innerHTML = `
+            <td class="p-3 font-bold text-slate-200">${b.test_name}</td>
+            <td class="p-3 text-[11px] text-slate-400 font-mono">${b.sql_query}</td>
+            <td class="p-3 text-[11px] text-emerald-400 font-mono">${b.nosql_query}</td>
+            <td class="p-3 text-right text-slate-300 font-mono">${b.sql_latency_ms} ms</td>
+            <td class="p-3 text-right text-emerald-400 font-mono font-bold">${b.nosql_latency_ms} ms</td>
+            <td class="p-3"><span class="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-950 text-emerald-300 border border-emerald-800">${b.winner}</span></td>
+          `;
+          tbody.appendChild(tr);
+        });
+
+        document.getElementById("bench-summary-box").classList.remove("hidden");
+        document.getElementById("bench-rec-store").innerText = data.overall_summary.recommended_store;
+        document.getElementById("bench-speedup").innerText = data.overall_summary.speedup_ratio;
+        showToast("Polyglot benchmark suite completed", "success");
+      } catch (e) {
+        showToast(e.message, "error");
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = `<i class="fa-solid fa-gauge-simple-high"></i> Run Benchmark Suite`;
+      }
+    }
+
+    // 5. CLA-2 Academic Report Controller
+    async function generateReport() {
+      const btn = document.getElementById("report-gen-btn");
+      btn.disabled = true;
+      btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Compiling...`;
+
+      try {
+        const resp = await fetch("/api/v1/academic/generate-report", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            student_name: "Candidate Principal Engineer",
+            course_code: "21CSE562T",
+            assessment: "Continuous Learning Assessment (CLA-2)"
+          })
+        });
+        const data = await resp.json();
+        document.getElementById("report-markdown-preview").innerText = data.markdown_content;
+        showToast("CLA-2 Academic Report generated successfully", "success");
+      } catch (e) {
+        showToast(e.message, "error");
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = `<i class="fa-solid fa-arrows-rotate"></i> Compile Report`;
+      }
+    }
+
+    function copyReport() {
+      const text = document.getElementById("report-markdown-preview").innerText;
+      navigator.clipboard.writeText(text);
+      showToast("Report copied to clipboard", "success");
+    }
+
+    function showToast(msg, type = "info") {
+      const toast = document.getElementById("toast");
+      const icon = document.getElementById("toast-icon");
+      const label = document.getElementById("toast-msg");
+
+      label.innerText = msg;
+      if (type === "success") icon.className = "fa-solid fa-check text-emerald-400";
+      else if (type === "error") icon.className = "fa-solid fa-triangle-exclamation text-red-400";
+      else icon.className = "fa-solid fa-info text-cyan-400";
+
+      toast.classList.remove("translate-y-20", "opacity-0");
+      setTimeout(() => toast.classList.add("translate-y-20", "opacity-0"), 3500);
+    }
+  </script>
+</body>
+</html>
