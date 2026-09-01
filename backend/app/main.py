@@ -79,7 +79,9 @@ app.include_router(api_router, prefix=settings.API_V1_STR)
 @app.get("/dashboard", response_class=HTMLResponse, tags=["Dashboard"])
 async def dashboard():
     """Renders the MongoPolyglot Mission Control Visual Dashboard."""
-    html_path = TEMPLATES_DIR / "dashboard.html"
+    html_path = TEMPLATES_DIR / "index.html"
+    if not html_path.exists():
+        html_path = TEMPLATES_DIR / "dashboard.html"
     if not html_path.exists():
         return HTMLResponse("<h1>Error: Dashboard template not found</h1>", status_code=404)
     return HTMLResponse(html_path.read_text(encoding="utf-8"))
