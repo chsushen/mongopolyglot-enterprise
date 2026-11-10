@@ -1,22 +1,32 @@
 import pytest
 from starlette.testclient import TestClient
 from backend.app.main import app
+from backend.app.core.config import settings
+from backend.app.core.db_mongo import mongo_manager
 
 
 @pytest.fixture(scope="module", autouse=True)
 def init_lifespan():
-    with TestClient(app) as client:
-        yield client
+    original_mock_mode = settings.USE_MOCK_SANDBOX
+    settings.USE_MOCK_SANDBOX = True
+
+    try:
+        with TestClient(app) as client:
+            assert mongo_manager.is_mock, (
+                "API tests must never connect to the real Atlas database."
+            )
+            yield client
+    finally:
+        settings.USE_MOCK_SANDBOX = original_mock_mode
 
 
 def test_root_status(init_lifespan):
     client = init_lifespan
     resp = client.get("/")
     assert resp.status_code == 200
-    data = resp.json()
-    assert data["status"] == "OPERATIONAL"
-    assert data["course_mapping"] == "21CSE562T (Units 4 & 5 CLA-2 Compliant)"
-    assert data["dashboard_ui"] == "/dashboard"
+    assert "text/html" in resp.headers["content-type"]
+    assert "MongoPolyglot" in resp.text
+    assert "Discover Products" in resp.text
 
 
 def test_dashboard_page_rendering(init_lifespan):

@@ -119,16 +119,31 @@ def generate_ecommerce_data():
 async def seed_ecommerce_data(mongo_db, sql_mgr):
     users, accounts, products, orders, order_items_sql = generate_ecommerce_data()
 
-    # 1. MongoDB Collections
-    for name, data in [
-        ("users", users),
-        ("accounts", accounts),
-        ("products", products),
-        ("orders", orders),
+    # 1. MongoDB collections: stable-key upserts.
+    # Preserve unrelated documents; do not clear entire collections.
+    for name, data, key in [
+        ("users", users, "user_id"),
+        ("accounts", accounts, "account_id"),
+        ("products", products, "product_id"),
+        ("orders", orders, "order_id"),
     ]:
         coll = mongo_db[name]
-        await coll.delete_many({})
-        await coll.insert_many(data)
+        for document in data:
+            document_filter = {key: document[key]}
+
+            if name == "accounts":
+                # Preserve existing account balances.
+                await coll.update_one(
+                    document_filter,
+                    {"$setOnInsert": document},
+                    upsert=True,
+                )
+            else:
+                await coll.replace_one(
+                    document_filter,
+                    document,
+                    upsert=True,
+                )
 
     # MongoDB Indexes
     await mongo_db["accounts"].create_index([("account_id", 1)], unique=True)
@@ -138,32 +153,99 @@ async def seed_ecommerce_data(mongo_db, sql_mgr):
     await mongo_db["orders"].create_index([("order_date", -1)])
     await mongo_db["products"].create_index([("category", 1)])
 
-    # 2. Relational SQL
+    # 2. Relational SQL: update existing rows without REPLACE semantics.
     await sql_mgr.init_schema()
+
     for u in users:
         await sql_mgr.execute_write(
-            "INSERT OR REPLACE INTO users (user_id, username, email, created_at) VALUES (?, ?, ?, ?)",
+            """
+            INSERT INTO users (user_id, username, email, created_at)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(user_id) DO UPDATE SET
+                username = excluded.username,
+                email = excluded.email,
+                created_at = excluded.created_at
+            """,
             (u["user_id"], u["username"], u["email"], u["created_at"])
         )
+
     for a in accounts:
         await sql_mgr.execute_write(
-            "INSERT OR REPLACE INTO accounts (account_id, user_id, balance, currency, updated_at) VALUES (?, ?, ?, ?, ?)",
-            (a["account_id"], a["user_id"], a["balance"], a["currency"], a["updated_at"])
+            """
+            INSERT INTO accounts (
+                account_id, user_id, balance, currency, updated_at
+            ) VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(account_id) DO NOTHING
+            """,
+            (
+                a["account_id"], a["user_id"], a["balance"],
+                a["currency"], a["updated_at"]
+            )
         )
+
     for p in products:
         await sql_mgr.execute_write(
-            "INSERT OR REPLACE INTO products (product_id, name, category, price, stock_quantity) VALUES (?, ?, ?, ?, ?)",
-            (p["product_id"], p["name"], p["category"], p["price"], p["stock_quantity"])
+            """
+            INSERT INTO products (
+                product_id, name, category, price, stock_quantity
+            ) VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(product_id) DO UPDATE SET
+                name = excluded.name,
+                category = excluded.category,
+                price = excluded.price,
+                stock_quantity = excluded.stock_quantity
+            """,
+            (
+                p["product_id"], p["name"], p["category"],
+                p["price"], p["stock_quantity"]
+            )
         )
+
     for o in orders:
         await sql_mgr.execute_write(
-            "INSERT OR REPLACE INTO orders (order_id, user_id, order_date, status, total_amount) VALUES (?, ?, ?, ?, ?)",
-            (o["order_id"], o["user_id"], o["order_date"], o["status"], o["total_amount"])
+            """
+            INSERT INTO orders (
+                order_id, user_id, order_date, status, total_amount
+            ) VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(order_id) DO UPDATE SET
+                user_id = excluded.user_id,
+                order_date = excluded.order_date,
+                status = excluded.status,
+                total_amount = excluded.total_amount
+            """,
+            (
+                o["order_id"], o["user_id"], o["order_date"],
+                o["status"], o["total_amount"]
+            )
         )
-    for it in order_items_sql:
+
+    # Replace line items only for orders generated in this seeding run.
+    # This removes stale children without touching unrelated orders.
+    generated_order_ids = [o["order_id"] for o in orders]
+
+    if generated_order_ids:
+        placeholders = ",".join("?" for _ in generated_order_ids)
         await sql_mgr.execute_write(
-            "INSERT OR REPLACE INTO order_items (item_id, order_id, product_id, quantity, unit_price) VALUES (?, ?, ?, ?, ?)",
-            (it["item_id"], it["order_id"], it["product_id"], it["quantity"], it["unit_price"])
+            f"DELETE FROM order_items WHERE order_id IN ({placeholders})",
+            tuple(generated_order_ids)
+        )
+
+    for item in order_items_sql:
+        await sql_mgr.execute_write(
+            """
+            INSERT INTO order_items (
+                item_id, order_id, product_id, quantity, unit_price
+            ) VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(item_id) DO UPDATE SET
+                order_id = excluded.order_id,
+                product_id = excluded.product_id,
+                quantity = excluded.quantity,
+                unit_price = excluded.unit_price
+            """,
+            (
+                item["item_id"], item["order_id"], item["product_id"],
+                item["quantity"], item["unit_price"]
+            )
         )
 
     logger.info(

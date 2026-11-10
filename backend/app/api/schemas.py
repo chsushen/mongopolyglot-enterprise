@@ -45,6 +45,7 @@ class TransactionResponse(BaseModel):
     success: bool
     status: str
     transaction_id: Optional[str] = None
+    transaction_mode: str = "MOCK_SIMULATION"
     from_account_balance_before: float
     from_account_balance_after: float
     to_account_balance_before: float
@@ -80,3 +81,15 @@ class AcademicReportResponse(BaseModel):
     generated_at: str
     markdown_content: str
     summary: Dict[str, Any]
+
+
+
+class StoreCheckoutItem(BaseModel):
+    product_id: str = Field(..., min_length=1, max_length=50)
+    quantity: int = Field(..., ge=1, le=20)
+
+
+class StoreCheckoutRequest(BaseModel):
+    customer_name: str = Field(..., min_length=2, max_length=100)
+    customer_email: str = Field(..., min_length=5, max_length=150)
+    items: List[StoreCheckoutItem] = Field(..., min_length=1, max_length=30)

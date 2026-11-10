@@ -1,41 +1,13 @@
 import logging
-import time
 from typing import Dict, Any, List, Optional
+
 from ..core.db_mongo import mongo_manager
 
 logger = logging.getLogger(__name__)
 
 
 class IndexProfiler:
-    r"""Manages index creation, inspection, and executionStats latency profiling.
-
-    Mathematical & Algorithmic Complexity:
-    ---------------------------------------
-    1. Full Collection Table Scan (COLLSCAN):
-       Sequential disk/memory scan examining every single document in the collection.
-       Time complexity is strictly linear with respect to collection size $N$:
-       $$\mathcal{T}_{\text{COLLSCAN}}(N) = \mathcal{O}(N)$$
-       Every document page must be loaded into memory and evaluated against predicate $\mathcal{P}$.
-
-    2. B-Tree Index Scan (IXSCAN):
-       Balanced search tree (B-Tree) traversal with branching factor $B \ge 128$.
-       Time complexity to search and retrieve matching keys satisfies logarithmic bounds:
-       $$\mathcal{T}_{\text{IXSCAN}}(N, K) = \mathcal{O}(\log_B N + K)$$
-       where $K$ is the result cardinality ($K \ll N$).
-       Document selectivity ratio:
-       $$\sigma = \frac{K}{N}$$
-       For small $\sigma$, IXSCAN reduces I/O operations by orders of magnitude.
-
-    3. Performance Speedup Ratio:
-       $$\mathcal{S} = \frac{\mathcal{T}_{\text{COLLSCAN}}}{\mathcal{T}_{\text{IXSCAN}}}$$
-       Efficiency gain percentage:
-       $$\mathcal{E} = \left( 1 - \frac{\mathcal{T}_{\text{IXSCAN}}}{\mathcal{T}_{\text{COLLSCAN}}} \right) \times 100\%$$
-
-    4. Geospatial 2dsphere Indexing:
-       Tessellates the spherical Earth model using Google's S2 Geometry library.
-       Hierarchically maps geographic coordinates $[longitude, latitude]$ onto space-filling
-       Hilbert curves for $\mathcal{O}(\log N)$ range and proximity neighbor searches.
-    """
+    """Manage indexes and inspect genuine MongoDB execution statistics."""
 
     def __init__(self, db=None):
         self._db = db
@@ -47,34 +19,138 @@ class IndexProfiler:
     async def list_indexes(self, collection_name: str) -> List[Dict[str, Any]]:
         coll = self.db[collection_name]
         raw_indexes = await coll.index_information()
+
         formatted = []
         for name, spec in raw_indexes.items():
+            keys = spec.get("key", [])
             formatted.append({
                 "name": name,
-                "key": spec.get("key", []),
+                "key": keys,
                 "unique": spec.get("unique", False),
-                "is_geospatial": any("2dsphere" in str(v) or "2d" in str(v) for _, v in spec.get("key", [])),
+                "is_geospatial": any(
+                    "2dsphere" in str(value) or "2d" in str(value)
+                    for _, value in keys
+                ),
             })
+
         return formatted
 
     async def create_index(
-        self, collection_name: str, keys: List[tuple], unique: bool = False, name: Optional[str] = None
+        self,
+        collection_name: str,
+        keys: List[tuple],
+        unique: bool = False,
+        name: Optional[str] = None,
     ) -> str:
         coll = self.db[collection_name]
         kwargs = {"unique": unique}
+
         if name:
             kwargs["name"] = name
-        idx_name = await coll.create_index(keys, **kwargs)
-        return idx_name
+
+        return await coll.create_index(keys, **kwargs)
 
     async def drop_index(self, collection_name: str, index_name: str) -> bool:
         coll = self.db[collection_name]
+
         try:
             await coll.drop_index(index_name)
             return True
         except Exception as exc:
-            logger.warning("Failed to drop index %s: %s", index_name, exc)
+            logger.warning(
+                "Failed to drop index %s. Error type: %s",
+                index_name,
+                type(exc).__name__,
+            )
             return False
+
+    @staticmethod
+    def _walk_plan(node):
+        """Collect execution-plan stages recursively."""
+        stages = []
+        index_names = []
+
+        if isinstance(node, dict):
+            stage = node.get("stage")
+            if isinstance(stage, str):
+                stages.append(stage)
+
+            index_name = node.get("indexName")
+            if isinstance(index_name, str):
+                index_names.append(index_name)
+
+            for value in node.values():
+                child_stages, child_indexes = IndexProfiler._walk_plan(value)
+                stages.extend(child_stages)
+                index_names.extend(child_indexes)
+
+        elif isinstance(node, list):
+            for value in node:
+                child_stages, child_indexes = IndexProfiler._walk_plan(value)
+                stages.extend(child_stages)
+                index_names.extend(child_indexes)
+
+        return stages, index_names
+
+    @staticmethod
+    def _unavailable_result(collection_name, query, indexed_field, reason):
+        """Never manufacture execution statistics for a mock database."""
+        unavailable = {
+            "stage": "UNAVAILABLE",
+            "execution_time_ms": None,
+            "docs_examined": None,
+            "keys_examined": None,
+            "docs_returned": None,
+            "index_used": None,
+            "scan_type": "Not available in mock mode",
+        }
+
+        return {
+            "status": "unavailable",
+            "measurement_source": "none",
+            "collection": collection_name,
+            "query": query,
+            "indexed_field": indexed_field,
+            "docs_returned": None,
+            "collscan": dict(unavailable),
+            "ixscan": dict(unavailable),
+            "speedup_factor": "N/A",
+            "efficiency_gain_pct": None,
+            "recommendation": reason,
+        }
+
+    @staticmethod
+    def _format_execution(explain_result, expected_stage, scan_type, index_used=None):
+        """Extract executionStats and actual plan stage from explain output."""
+        stats = explain_result.get("executionStats")
+
+        if not isinstance(stats, dict):
+            raise RuntimeError(
+                "MongoDB explain response did not contain executionStats."
+            )
+
+        stages, discovered_indexes = IndexProfiler._walk_plan(
+            stats.get("executionStages", {})
+        )
+
+        if expected_stage not in stages:
+            raise RuntimeError(
+                f"Expected {expected_stage} plan stage, "
+                f"but MongoDB reported: {stages or 'unknown'}"
+            )
+
+        if expected_stage == "IXSCAN" and discovered_indexes:
+            index_used = discovered_indexes[0]
+
+        return {
+            "stage": expected_stage,
+            "execution_time_ms": stats.get("executionTimeMillis"),
+            "docs_examined": stats.get("totalDocsExamined"),
+            "keys_examined": stats.get("totalKeysExamined"),
+            "docs_returned": stats.get("nReturned"),
+            "index_used": index_used,
+            "scan_type": scan_type,
+        }
 
     async def compare_query_performance(
         self,
@@ -82,60 +158,124 @@ class IndexProfiler:
         query: Dict[str, Any],
         indexed_field: str,
     ) -> Dict[str, Any]:
-        """Compares execution time and scan stages between indexed and unindexed executions."""
+        """
+        Compare forced COLLSCAN and hinted IXSCAN using real MongoDB
+        executionStats. No timing values or document counts are fabricated.
+        """
+
+        # Mock implementations do not expose genuine MongoDB execution plans.
+        if self._db is None and mongo_manager.is_mock:
+            return self._unavailable_result(
+                collection_name,
+                query,
+                indexed_field,
+                "Genuine executionStats require a real MongoDB server. "
+                "This request used the mock backend.",
+            )
+
         coll = self.db[collection_name]
 
-        # Ensure index exists
-        idx_name = f"profiler_idx_{indexed_field.replace('.', '_')}"
-        await coll.create_index([(indexed_field, 1)], name=idx_name)
+        # Reuse an existing index whose leading key matches the requested field.
+        raw_indexes = await coll.index_information()
+        index_name = None
 
-        # 1. Profile with Index (IXSCAN)
-        t0 = time.perf_counter()
-        docs_indexed = await coll.find(query).to_list(length=1000)
-        t_ixscan_ms = round((time.perf_counter() - t0) * 1000, 3)
-        ixscan_ms = max(0.12, t_ixscan_ms)
+        for name, spec in raw_indexes.items():
+            keys = spec.get("key", [])
+            if keys and keys[0][0] == indexed_field:
+                index_name = name
+                break
 
-        # 2. Drop index to test unindexed scan
-        await coll.drop_index(idx_name)
+        # Create an index only when no suitable existing index is available.
+        if index_name is None:
+            safe_field = indexed_field.replace(".", "_")
+            index_name = await coll.create_index(
+                [(indexed_field, 1)],
+                name=f"profiler_idx_{safe_field}",
+            )
 
-        # Profile without Index (COLLSCAN)
-        t1 = time.perf_counter()
-        # In mongomock/real mongo, simulate or measure full table scan
-        docs_unindexed = await coll.find(query).to_list(length=1000)
-        t_collscan_ms = round((time.perf_counter() - t1) * 1000, 3)
-        # COLLSCAN overhead factor for realism in small mock datasets
-        collscan_ms = max(round(ixscan_ms * 4.8 + 1.25, 2), t_collscan_ms)
+        database = coll.database
 
-        # Re-create index for future queries
-        await coll.create_index([(indexed_field, 1)], name=idx_name)
+        # Force a collection scan without dropping or modifying indexes.
+        collscan_explain = await database.command(
+            "explain",
+            {
+                "find": collection_name,
+                "filter": query,
+                "hint": {"$natural": 1},
+            },
+            verbosity="executionStats",
+        )
 
-        speedup_ratio = round(collscan_ms / max(0.01, ixscan_ms), 1)
+        # Force the selected existing index.
+        ixscan_explain = await database.command(
+            "explain",
+            {
+                "find": collection_name,
+                "filter": query,
+                "hint": index_name,
+            },
+            verbosity="executionStats",
+        )
+
+        collscan = self._format_execution(
+            collscan_explain,
+            "COLLSCAN",
+            "Full collection scan",
+        )
+
+        ixscan = self._format_execution(
+            ixscan_explain,
+            "IXSCAN",
+            "Index scan",
+            index_name,
+        )
+
+        coll_time = collscan["execution_time_ms"]
+        ix_time = ixscan["execution_time_ms"]
+
+        # MongoDB reports executionTimeMillis as an integer. Small queries
+        # may legitimately report 0 ms, so no artificial speedup is produced.
+        if (
+            isinstance(coll_time, (int, float))
+            and isinstance(ix_time, (int, float))
+            and coll_time > 0
+            and ix_time > 0
+        ):
+            speedup = round(coll_time / ix_time, 2)
+            speedup_factor = f"{speedup}x"
+            efficiency = round((1 - ix_time / coll_time) * 100, 1)
+        else:
+            speedup_factor = "N/A"
+            efficiency = None
+
+        docs_returned = ixscan["docs_returned"]
+
+        recommendation = (
+            f"MongoDB executionStats confirmed COLLSCAN and IXSCAN "
+            f"for the query on '{indexed_field}'. "
+            f"Index used: {index_name}. "
+        )
+
+        if speedup_factor == "N/A":
+            recommendation += (
+                "Execution times were too small for a reliable "
+                "millisecond-level speedup calculation."
+            )
+        else:
+            recommendation += f"Measured explain-time ratio: {speedup_factor}."
 
         return {
+            "status": "measured",
+            "measurement_source": "MongoDB explain executionStats",
             "collection": collection_name,
             "query": query,
             "indexed_field": indexed_field,
-            "docs_returned": len(docs_indexed),
-            "collscan": {
-                "stage": "COLLSCAN",
-                "execution_time_ms": collscan_ms,
-                "docs_examined": 150 if collection_name == "restaurants_mcdonalds" else 200,
-                "index_used": None,
-                "scan_type": "Full Collection Table Scan",
-            },
-            "ixscan": {
-                "stage": "IXSCAN",
-                "execution_time_ms": ixscan_ms,
-                "docs_examined": len(docs_indexed),
-                "index_used": idx_name,
-                "scan_type": "B-Tree Index Scan",
-            },
-            "speedup_factor": f"{speedup_ratio}x",
-            "efficiency_gain_pct": round((1 - (ixscan_ms / collscan_ms)) * 100, 1),
-            "recommendation": (
-                f"Query on field '{indexed_field}' achieves {speedup_ratio}x latency reduction using IXSCAN. "
-                "Retain this B-Tree index in production."
-            ),
+            "docs_returned": docs_returned,
+            "collscan": collscan,
+            "ixscan": ixscan,
+            "speedup_factor": speedup_factor,
+            "efficiency_gain_pct": efficiency,
+            "recommendation": recommendation,
         }
 
 

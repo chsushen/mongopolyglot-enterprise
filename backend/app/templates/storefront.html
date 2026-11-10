@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MongoPolyglot | Discover Products</title>
+<style>
+:root{--ink:#17221f;--muted:#78817d;--green:#176b50;--lime:#d9f36a;--paper:#f7f8f4;--line:#e7eae4}
+*{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+header{height:76px;background:#fff;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;padding:0 7%;position:sticky;top:0;z-index:5}
+.logo{font-size:21px;font-weight:850;letter-spacing:-1px}.logo span{color:var(--green)}
+nav{display:flex;gap:28px;color:#65716b;font-size:14px}nav a{color:inherit;text-decoration:none}
+.cart-btn{border:0;background:var(--ink);color:white;border-radius:30px;padding:12px 20px;font-weight:700;cursor:pointer}
+.hero{margin:32px auto 24px;max-width:1320px;width:86%;min-height:310px;background:#173d32;border-radius:22px;color:white;display:flex;align-items:center;padding:48px 7%;position:relative;overflow:hidden}
+.hero:after{content:"";position:absolute;width:360px;height:360px;border:1px solid #ffffff25;border-radius:50%;right:8%;top:-25px;box-shadow:0 0 0 45px #ffffff08,0 0 0 90px #ffffff08}
+.hero-content{position:relative;z-index:1;max-width:600px}.eyebrow{color:var(--lime);font-size:12px;font-weight:800;letter-spacing:2px;text-transform:uppercase}
+h1{font-size:clamp(36px,5vw,58px);line-height:1.05;letter-spacing:-2px;margin:18px 0}.hero p{color:#d0ded7;line-height:1.7;max-width:480px}.hero a{display:inline-block;background:var(--lime);color:#1a3027;padding:14px 22px;border-radius:8px;text-decoration:none;font-weight:800;margin-top:12px}
+main{max-width:1320px;width:86%;margin:42px auto 80px}.section-head{display:flex;justify-content:space-between;align-items:end;gap:20px;margin-bottom:24px}.section-head h2{font-size:29px;letter-spacing:-1px;margin:0 0 8px}.section-head p{margin:0;color:var(--muted);font-size:14px}
+.controls{display:flex;gap:12px;flex-wrap:wrap;margin:22px 0}.search{flex:1;min-width:220px;padding:14px 17px;border:1px solid var(--line);border-radius:9px;background:white;font-size:14px;outline-color:var(--green)}
+select{padding:13px 16px;border:1px solid var(--line);border-radius:9px;background:white;color:var(--ink);font-size:14px}
+.categories{display:flex;gap:9px;flex-wrap:wrap;margin-bottom:26px}.chip{border:1px solid var(--line);border-radius:30px;background:white;padding:10px 17px;cursor:pointer;color:#59645e;font-size:13px}.chip.active{background:var(--green);color:white;border-color:var(--green)}
+.grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:19px}.product{background:#fff;border:1px solid var(--line);border-radius:14px;overflow:hidden;transition:.2s}.product:hover{transform:translateY(-4px);box-shadow:0 12px 28px #173d3210}
+.art{height:175px;display:flex;align-items:center;justify-content:center;font-size:64px;background:linear-gradient(140deg,#e8f0e7,#f4f2e8);position:relative}.art small{position:absolute;left:13px;top:13px;background:#fff;padding:6px 10px;border-radius:20px;font-size:10px;font-weight:800;color:var(--green)}
+.product-info{padding:17px}.category{font-size:11px;color:var(--green);font-weight:800;text-transform:uppercase;letter-spacing:1px}.product h3{font-size:15px;margin:9px 0 7px;min-height:38px}.sku{font-size:11px;color:#9aa29d}.product-bottom{display:flex;align-items:center;justify-content:space-between;margin-top:17px}.price{font-size:19px;font-weight:850}.add{background:var(--green);color:white;border:0;border-radius:8px;padding:10px 13px;font-weight:700;cursor:pointer}.add:disabled{opacity:.4;cursor:not-allowed}
+.stock{font-size:11px;color:#76827b;margin-top:10px}.empty,.loading{grid-column:1/-1;text-align:center;padding:65px 15px;color:var(--muted);background:white;border-radius:12px}
+footer{padding:30px 7%;background:#172a23;color:#c7d5ce;display:flex;justify-content:space-between;gap:20px;font-size:13px;flex-wrap:wrap}
+.overlay{display:none;position:fixed;inset:0;background:#101b18a8;z-index:10;justify-content:flex-end}.overlay.show{display:flex}.drawer{background:white;width:min(440px,100%);height:100%;padding:25px;overflow:auto}.drawer-head{display:flex;justify-content:space-between;align-items:center}.drawer-head h2{margin:0}.close{border:0;background:#eee;border-radius:50%;width:36px;height:36px;font-size:20px;cursor:pointer}.cart-item{display:flex;justify-content:space-between;gap:12px;padding:17px 0;border-bottom:1px solid var(--line)}.cart-item button{border:0;background:#f2f2ed;border-radius:6px;padding:5px 9px;cursor:pointer}.cart-total{display:flex;justify-content:space-between;font-size:20px;font-weight:850;margin:25px 0}.checkout{width:100%;background:var(--green);color:white;border:0;padding:15px;border-radius:9px;font-weight:800;cursor:pointer}.notice{font-size:12px;color:var(--muted);line-height:1.5;margin-top:14px}
+@media(max-width:950px){.grid{grid-template-columns:repeat(3,1fr)}nav{display:none}}
+@media(max-width:650px){header{padding:0 5%}.hero,main{width:90%}.hero{padding:35px 25px;min-height:280px}.grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:11px}.art{height:130px;font-size:48px}.product-info{padding:12px}.section-head{align-items:start;flex-direction:column}}
+@media(max-width:390px){.grid{grid-template-columns:1fr 1fr}.price{font-size:16px}.add{padding:8px}}
+</style>
+</head>
+<body>
+<header>
+ <div class="logo">mongo<span>polyglot</span>.</div>
+ <nav><a href="#home">Home</a><a href="#products">Shop</a><a href="/dashboard">Technology Dashboard</a></nav>
+ <button class="cart-btn" onclick="openCart()">Cart <span id="cartCount">0</span></button>
+</header>
+<section class="hero" id="home">
+ <div class="hero-content">
+  <div class="eyebrow">The smarter way to shop</div>
+  <h1>Find your next<br>favourite thing.</h1>
+  <p>Explore our curated demo catalogue across electronics, apparel, beauty, books and more.</p>
+  <a href="#products">Explore collection →</a>
+ </div>
+</section>
+<main id="products">
+ <div class="section-head"><div><h2>Explore the collection</h2><p>Discover products from our live MongoDB catalogue.</p></div><p id="resultCount">Loading products…</p></div>
+ <div class="controls">
+  <input class="search" id="search" placeholder="Search products, categories or SKU…" oninput="loadProducts()">
+  <select id="sort" onchange="loadProducts()"><option value="featured">Featured</option><option value="price_asc">Price: Low to high</option><option value="price_desc">Price: High to low</option><option value="name">Name: A to Z</option></select>
+ </div>
+ <div class="categories" id="categories"></div>
+ <div class="grid" id="grid"><div class="loading">Connecting to the product catalogue…</div></div>
+</main>
+<footer><strong>mongopolyglot.</strong><span>Powered by FastAPI + MongoDB Atlas</span><span>Academic demonstration storefront · No real payments</span></footer>
+
+<div class="overlay" id="cartOverlay" onclick="if(event.target===this)closeCart()">
+ <aside class="drawer">
+  <div class="drawer-head"><h2>Your cart</h2><button class="close" onclick="closeCart()">×</button></div>
+  <div id="cartItems"></div>
+  <div class="cart-total"><span>Total</span><span id="cartTotal">₹0.00</span></div>
+  <button class="checkout" onclick="checkout()">Continue to checkout</button>
+  <p class="notice">Demo checkout only. No payment will be collected. Your cart is stored in this browser.</p>
+ </aside>
+</div>
+<script>
+const API="/api/v1/store/products";
+let activeCategory="All";
+let products=[];
+let cart=JSON.parse(localStorage.getItem("mp_cart")||"{}");
+const money=n=>"₹"+Number(n).toFixed(2);
+const icons={Apparel:"👕",Electronics:"🎧",Beauty:"✨",Books:"📚","Home & Kitchen":"🏡"};
+let searchTimer;
+async function loadProducts(){
+ clearTimeout(searchTimer);
+ searchTimer=setTimeout(fetchProducts,220);
+}
+async function fetchProducts(){
+ const params=new URLSearchParams({sort:document.getElementById("sort").value});
+ const q=document.getElementById("search").value.trim();
+ if(q)params.set("q",q);
+ if(activeCategory!=="All")params.set("category",activeCategory);
+ const grid=document.getElementById("grid");
+ try{
+  const response=await fetch(API+"?"+params);
+  if(!response.ok)throw Error("Catalogue request failed");
+  const data=await response.json();
+  products=data.products||[];
+  document.getElementById("resultCount").textContent=data.total+" products";
+  renderCategories(data.categories||[]);
+  renderProducts();
+ }catch(e){
+  grid.innerHTML='<div class="empty">Unable to load the catalogue. Please refresh the page.</div>';
+  document.getElementById("resultCount").textContent="Connection error";
+ }
+}
+function renderCategories(categories){
+ const el=document.getElementById("categories");
+ el.innerHTML=["All",...categories].map(c=>`<button class="chip ${activeCategory===c?"active":""}" onclick="setCategory(${JSON.stringify(c)})">${c}</button>`).join("");
+}
+function setCategory(c){activeCategory=c;fetchProducts()}
+function renderProducts(){
+ const grid=document.getElementById("grid");
+ if(!products.length){grid.innerHTML='<div class="empty">No matching products found. Try another search.</div>';return}
+ grid.innerHTML=products.map(p=>{
+  const emoji=icons[p.category]||"✦";
+  return `<article class="product">
+   <div class="art"><small>${p.category||"Collection"}</small>${emoji}</div>
+   <div class="product-info">
+    <div class="category">${p.category||"General"}</div>
+    <h3>${escapeHtml(p.name)}</h3>
+    <div class="sku">${escapeHtml(p.sku||p.product_id)}</div>
+    <div class="product-bottom"><span class="price">${money(p.price)}</span><button class="add" onclick="addToCart('${p.product_id}')" ${p.stock_quantity<=0?"disabled":""}>Add +</button></div>
+    <div class="stock">${p.stock_quantity} in stock</div>
+   </div></article>`;
+ }).join("");
+}
+function escapeHtml(s){return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
+function saveCart(){localStorage.setItem("mp_cart",JSON.stringify(cart));renderCart()}
+function addToCart(id){const p=products.find(x=>x.product_id===id);if(!p)return;const current=cart[id]?.qty||0;if(current>=p.stock_quantity){alert("Maximum available stock reached.");return}cart[id]={product:p,qty:current+1};saveCart()}
+function renderCart(){
+ const entries=Object.values(cart);let count=entries.reduce((s,x)=>s+x.qty,0);let total=entries.reduce((s,x)=>s+x.qty*Number(x.product.price),0);
+ document.getElementById("cartCount").textContent=count;document.getElementById("cartTotal").textContent=money(total);
+ document.getElementById("cartItems").innerHTML=entries.length?entries.map(x=>`<div class="cart-item"><div><strong>${escapeHtml(x.product.name)}</strong><div class="sku">${money(x.product.price)} each</div><div style="margin-top:9px"><button onclick="changeQty('${x.product.product_id}',-1)">−</button> &nbsp;${x.qty}&nbsp; <button onclick="changeQty('${x.product.product_id}',1)">+</button></div></div><strong>${money(x.qty*x.product.price)}</strong></div>`).join(""):'<div class="empty">Your cart is empty. Find something you love!</div>';
+}
+function changeQty(id,d){if(!cart[id])return;const next=cart[id].qty+d;if(next<=0)delete cart[id];else if(next<=cart[id].product.stock_quantity)cart[id].qty=next;else alert("Maximum available stock reached.");saveCart()}
+function openCart(){renderCart();document.getElementById("cartOverlay").classList.add("show")}
+function closeCart(){document.getElementById("cartOverlay").classList.remove("show")}
+async function checkout(){
+ const entries=Object.values(cart);
+ if(!entries.length){alert("Your cart is empty.");return}
+
+ const customer_name=prompt("Enter your full name:");
+ if(!customer_name || customer_name.trim().length<2)return;
+
+ const customer_email=prompt("Enter your email address:");
+ if(!customer_email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customer_email.trim())){
+  alert("Please enter a valid email address.");return;
+ }
+
+ const button=document.querySelector(".checkout");
+ button.disabled=true;
+ button.textContent="Placing demo order…";
+
+ try{
+  const response=await fetch("/api/v1/store/checkout",{
+   method:"POST",
+   headers:{"Content-Type":"application/json"},
+   body:JSON.stringify({
+    customer_name:customer_name.trim(),
+    customer_email:customer_email.trim(),
+    items:entries.map(x=>({product_id:x.product.product_id,quantity:x.qty}))
+   })
+  });
+
+  const data=await response.json();
+  if(!response.ok)throw Error(data.detail||"Checkout failed");
+
+  cart={};
+  saveCart();
+  closeCart();
+  alert("Order saved successfully!\n\nOrder ID: "+data.order_id+"\nTotal: "+money(data.total_amount)+"\nStatus: "+data.status+"\n\nNo payment was collected.");
+ }catch(e){
+  alert("Checkout error: "+e.message);
+ }finally{
+  button.disabled=false;
+  button.textContent="Continue to checkout";
+ }
+}
+renderCart();fetchProducts();
+</script>
+</body>
+</html>

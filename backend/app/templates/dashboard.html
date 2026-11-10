@@ -115,11 +115,63 @@
       <a href="/docs" target="_blank" class="px-3 py-1 rounded bg-surface-800 hover:bg-surface-700 text-slate-300 transition flex items-center gap-1.5 border border-slate-700">
         <i class="fa-solid fa-book text-[10px] text-cyan-400"></i> OpenAPI Swagger
       </a>
-      <span class="flex items-center gap-1.5 text-emerald-400 font-mono text-[11px]">
-        <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> MOTOR SANDBOX
+      <span id="database-status" class="flex items-center gap-1.5 font-mono text-[11px]">
+        <span id="database-status-dot" class="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
+        <span id="database-status-label">CHECKING DATABASE</span>
       </span>
     </div>
   </header>
+
+  <script>
+    // Display the database backend reported by FastAPI.
+    (async function updateDatabaseStatus() {
+      const status = document.getElementById("database-status");
+      const dot = document.getElementById("database-status-dot");
+      const label = document.getElementById("database-status-label");
+
+      try {
+        const response = await fetch("/", {
+          headers: { "Accept": "application/json" }
+        });
+
+        if (!response.ok) {
+          throw new Error("Backend status request failed");
+        }
+
+        const health = await response.json();
+        const backend = health.database_backend;
+
+        status.classList.remove(
+          "text-emerald-400",
+          "text-amber-400",
+          "text-red-400"
+        );
+        dot.classList.remove(
+          "bg-emerald-500",
+          "bg-amber-500",
+          "bg-red-500"
+        );
+
+        if (backend === "LIVE_MONGODB_CLUSTER") {
+          label.textContent = "LIVE MONGODB";
+          status.classList.add("text-emerald-400");
+          dot.classList.add("bg-emerald-500");
+        } else if (backend === "MOTOR_MOCK_SANDBOX") {
+          label.textContent = "MOTOR SANDBOX";
+          status.classList.add("text-amber-400");
+          dot.classList.add("bg-amber-500");
+        } else {
+          label.textContent = "UNKNOWN DATABASE";
+          status.classList.add("text-red-400");
+          dot.classList.add("bg-red-500");
+        }
+      } catch (error) {
+        label.textContent = "STATUS UNAVAILABLE";
+        status.classList.add("text-red-400");
+        dot.classList.add("bg-red-500");
+      }
+    })();
+  </script>
 
   <!-- Main Container -->
   <main class="flex-1 p-6 max-w-7xl w-full mx-auto">
@@ -288,9 +340,14 @@
             <h2 class="text-sm font-bold uppercase tracking-wider text-slate-200 flex items-center gap-2">
               <i class="fa-solid fa-stopwatch-20 text-amber-400"></i> ExecutionStats Telemetry
             </h2>
-            <span id="speedup-badge" class="px-2.5 py-1 rounded text-xs font-mono font-bold bg-amber-950 text-amber-300 border border-amber-800">
-              Speedup: Awaiting Execution
-            </span>
+            <div class="flex flex-col items-end gap-1">
+              <span id="speedup-badge" class="px-2.5 py-1 rounded text-xs font-mono font-bold bg-amber-950 text-amber-300 border border-amber-800">
+                Speedup: Awaiting Execution
+              </span>
+              <span id="profiler-source" class="text-[10px] text-slate-500 font-mono">
+                No profiling run yet
+              </span>
+            </div>
           </div>
 
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
@@ -299,32 +356,35 @@
             <div class="p-4 rounded-xl bg-red-950/20 border border-red-900/40 flex flex-col justify-between">
               <div>
                 <div class="flex items-center justify-between mb-2">
-                  <span class="text-xs font-bold uppercase tracking-wider text-red-400 font-mono">COLLSCAN (Full Scan)</span>
-                  <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-red-900/40 text-red-300">O(N) Complexity</span>
+                  <span id="collscan-stage" class="text-xs font-bold uppercase tracking-wider text-red-400 font-mono">COLLSCAN</span>
+                  <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-red-900/40 text-red-300">Full Scan</span>
                 </div>
-                <div class="text-2xl font-black font-mono text-red-400" id="collscan-time">0.00 ms</div>
+                <div class="text-2xl font-black font-mono text-red-400" id="collscan-time">N/A</div>
                 <div class="text-xs text-slate-400 mt-2 space-y-1">
-                  <div>Documents Examined: <strong id="collscan-docs" class="text-slate-200 font-mono">0</strong></div>
-                  <div>Index Keys Evaluated: <strong class="text-slate-200 font-mono">0</strong></div>
+                  <div>Documents Examined: <strong id="collscan-docs" class="text-slate-200 font-mono">N/A</strong></div>
+                  <div>Index Keys Examined: <strong id="collscan-keys" class="text-slate-200 font-mono">N/A</strong></div>
+                  <div>Documents Returned: <strong id="collscan-returned" class="text-slate-200 font-mono">N/A</strong></div>
                 </div>
               </div>
-              <p class="text-[11px] text-red-300/70 mt-3 pt-2 border-t border-red-900/30">Scans every raw document in the collection storage engine.</p>
+              <p class="text-[11px] text-red-300/70 mt-3 pt-2 border-t border-red-900/30">Full collection scan reported by MongoDB.</p>
             </div>
 
             <!-- IXSCAN Card -->
             <div class="p-4 rounded-xl bg-emerald-950/20 border border-emerald-900/40 flex flex-col justify-between">
               <div>
                 <div class="flex items-center justify-between mb-2">
-                  <span class="text-xs font-bold uppercase tracking-wider text-emerald-400 font-mono">IXSCAN (B-Tree Index)</span>
-                  <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-900/40 text-emerald-300">O(log N) Complexity</span>
+                  <span id="ixscan-stage" class="text-xs font-bold uppercase tracking-wider text-emerald-400 font-mono">IXSCAN</span>
+                  <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-900/40 text-emerald-300">Index Scan</span>
                 </div>
-                <div class="text-2xl font-black font-mono text-emerald-400" id="ixscan-time">0.00 ms</div>
+                <div class="text-2xl font-black font-mono text-emerald-400" id="ixscan-time">N/A</div>
                 <div class="text-xs text-slate-400 mt-2 space-y-1">
-                  <div>Documents Examined: <strong id="ixscan-docs" class="text-slate-200 font-mono">0</strong></div>
+                  <div>Documents Examined: <strong id="ixscan-docs" class="text-slate-200 font-mono">N/A</strong></div>
+                  <div>Index Keys Examined: <strong id="ixscan-keys" class="text-slate-200 font-mono">N/A</strong></div>
+                  <div>Documents Returned: <strong id="ixscan-returned" class="text-slate-200 font-mono">N/A</strong></div>
                   <div>Index Used: <strong id="ixscan-name" class="text-slate-200 font-mono">None</strong></div>
                 </div>
               </div>
-              <p class="text-[11px] text-emerald-300/70 mt-3 pt-2 border-t border-emerald-900/30">B-Tree pointer traversal yields immediate document references.</p>
+              <p class="text-[11px] text-emerald-300/70 mt-3 pt-2 border-t border-emerald-900/30">Index scan reported by MongoDB.</p>
             </div>
           </div>
 
@@ -332,7 +392,7 @@
           <div class="mb-4">
             <div class="flex items-center justify-between text-xs mb-1.5 font-mono">
               <span class="text-slate-400">Relative Latency (Lower is Better)</span>
-              <span class="text-emerald-400 font-bold">Optimization Gain</span>
+              <span id="latency-note" class="text-emerald-400 font-bold">Awaiting measurement</span>
             </div>
             <div class="w-full h-3 bg-surface-900 rounded-full overflow-hidden flex border border-slate-800">
               <div id="ixscan-bar" class="h-full bg-emerald-500 transition-all duration-500" style="width: 10%"></div>
@@ -380,8 +440,8 @@
             </div>
             <div class="flex items-center justify-between p-2.5 rounded bg-surface-900 border border-slate-800">
               <div>
-                <span class="font-semibold text-slate-300 block">Simulate Stage-2 Failure</span>
-                <span class="text-[11px] text-slate-400">Triggers abort_transaction() and atomic rollback</span>
+                <span class="font-semibold text-slate-300 block">Inject Test Failure</span>
+                <span class="text-[11px] text-slate-400">Atlas: injects an error inside the native transaction to verify automatic abort. Mock mode: simulation only.</span>
               </div>
               <input type="checkbox" id="tx-fail-toggle" class="w-4 h-4 text-emerald-500 rounded border-slate-700 bg-surface-800 focus:ring-0">
             </div>
@@ -409,11 +469,16 @@
         <div class="glass-panel rounded-xl p-5 shadow-xl flex-1 flex flex-col">
           <div class="flex items-center justify-between mb-4 border-b border-slate-800 pb-3">
             <h2 class="text-sm font-bold uppercase tracking-wider text-slate-200 flex items-center gap-2">
-              <i class="fa-solid fa-terminal text-blue-400"></i> Two-Phase Commit Audit Log
+              <i class="fa-solid fa-terminal text-blue-400"></i> MongoDB Transaction Audit Log
             </h2>
-            <span id="tx-status-badge" class="px-2.5 py-1 rounded text-xs font-mono font-bold bg-surface-800 text-slate-400 border border-slate-700">
-              IDLE
-            </span>
+            <div class="flex flex-col items-end gap-1">
+              <span id="tx-mode-label" class="text-[10px] text-slate-500 font-mono">
+                Mode: Not yet verified
+              </span>
+              <span id="tx-status-badge" class="px-2.5 py-1 rounded text-xs font-mono font-bold bg-surface-800 text-slate-400 border border-slate-700">
+                IDLE
+              </span>
+            </div>
           </div>
 
           <!-- Console Event Stream -->
@@ -466,7 +531,7 @@
             <span class="text-sm font-bold text-emerald-400" id="bench-rec-store">MongoDB Document Store</span>
           </div>
           <div class="text-right">
-            <span class="text-xs text-slate-400 block">Performance Multiplier</span>
+            <span class="text-xs text-slate-400 block">Measurement Protocol</span>
             <span class="text-sm font-bold font-mono text-cyan-400" id="bench-speedup">--</span>
           </div>
         </div>
@@ -723,35 +788,97 @@ Click 'Compile Report' to generate the verified academic submission document.
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ collection_name: coll, query: query, indexed_field: field })
         });
+        if (!resp.ok) {
+          throw new Error(`Profiler request failed: HTTP ${resp.status}`);
+        }
+
         const data = await resp.json();
+        const collStats = data.collscan || {};
+        const ix = data.ixscan || {};
+        const isMeasured = data.status === "measured";
 
-        document.getElementById("speedup-badge").innerText = `Speedup: ${data.speedup_factor} (${data.efficiency_gain_pct}% faster)`;
-        document.getElementById("collscan-time").innerText = `${data.collscan.execution_time_ms} ms`;
-        document.getElementById("ixscan-time").innerText = `${data.ixscan.execution_time_ms} ms`;
-        document.getElementById("collscan-docs").innerText = data.collscan.docs_examined;
-        document.getElementById("ixscan-docs").innerText = data.ixscan.docs_examined;
-        document.getElementById("ixscan-name").innerText = data.ixscan.index_used;
-        document.getElementById("profiler-rec").innerText = data.recommendation;
+        const display = value =>
+          value === null || value === undefined ? "N/A" : String(value);
 
-        const maxTime = Math.max(data.collscan.execution_time_ms, 0.01);
-        const ixPct = Math.max(5, (data.ixscan.execution_time_ms / maxTime) * 100);
-        document.getElementById("ixscan-bar").style.width = `${ixPct}%`;
+        const displayTime = value =>
+          value === null || value === undefined ? "N/A" : `${value} ms`;
 
-        // Synchronize executionStats, latency data, and recommendations into localStorage
+        document.getElementById("profiler-source").innerText =
+          isMeasured
+            ? `Source: ${data.measurement_source}`
+            : `Source: ${data.measurement_source || "Unavailable"}`;
+
+        document.getElementById("speedup-badge").innerText =
+          isMeasured && data.speedup_factor !== "N/A"
+            ? `Speedup: ${data.speedup_factor} (${data.efficiency_gain_pct}% gain)`
+            : isMeasured
+              ? "Speedup: N/A — insufficient timing resolution"
+              : "Profiling unavailable";
+
+        document.getElementById("collscan-stage").innerText = display(collStats.stage);
+        document.getElementById("ixscan-stage").innerText = display(ix.stage);
+
+        document.getElementById("collscan-time").innerText =
+          displayTime(collStats.execution_time_ms);
+        document.getElementById("ixscan-time").innerText =
+          displayTime(ix.execution_time_ms);
+
+        document.getElementById("collscan-docs").innerText = display(collStats.docs_examined);
+        document.getElementById("collscan-keys").innerText = display(collStats.keys_examined);
+        document.getElementById("collscan-returned").innerText = display(collStats.docs_returned);
+
+        document.getElementById("ixscan-docs").innerText = display(ix.docs_examined);
+        document.getElementById("ixscan-keys").innerText = display(ix.keys_examined);
+        document.getElementById("ixscan-returned").innerText = display(ix.docs_returned);
+        document.getElementById("ixscan-name").innerText = display(ix.index_used);
+
+        document.getElementById("profiler-rec").innerText =
+          data.recommendation || "No recommendation available.";
+
+        const collTime = collStats.execution_time_ms;
+        const ixTime = ix.execution_time_ms;
+        const validTimes =
+          isMeasured &&
+          Number.isFinite(collTime) &&
+          Number.isFinite(ixTime) &&
+          collTime > 0 &&
+          ixTime > 0;
+
+        if (validTimes) {
+          const ixPct = Math.max(1, Math.min(100, (ixTime / collTime) * 100));
+          document.getElementById("ixscan-bar").style.width = `${ixPct}%`;
+          document.getElementById("latency-note").innerText =
+            `${display(data.efficiency_gain_pct)}% measured gain`;
+        } else {
+          document.getElementById("ixscan-bar").style.width = "0%";
+          document.getElementById("latency-note").innerText =
+            "Reliable latency comparison unavailable";
+        }
+
         const indexProfilePayload = {
-          collection_name: coll,
-          indexed_field: field,
-          query: query,
+          collection_name: data.collection,
+          indexed_field: data.indexed_field,
+          query: data.query,
+          status: data.status,
+          measurement_source: data.measurement_source,
           speedup_factor: data.speedup_factor,
           efficiency_gain_pct: data.efficiency_gain_pct,
-          collscan: data.collscan,
-          ixscan: data.ixscan,
+          collscan: collStats,
+          ixscan: ix,
           recommendation: data.recommendation,
           profiled_at: new Date().toISOString()
         };
-        localStorage.setItem('mongopolyglot_index_profile', JSON.stringify(indexProfilePayload));
 
-        showToast("Index profiling benchmark completed", "success");
+        localStorage.setItem(
+          "mongopolyglot_index_profile",
+          JSON.stringify(indexProfilePayload)
+        );
+
+        if (isMeasured) {
+          showToast("MongoDB execution statistics retrieved", "success");
+        } else {
+          showToast("Genuine execution statistics unavailable", "error");
+        }
       } catch (e) {
         showToast(e.message, "error");
       } finally {
@@ -804,6 +931,23 @@ Click 'Compile Report' to generate the verified academic submission document.
         });
         const data = await resp.json();
 
+        if (!resp.ok) {
+          throw new Error(data.detail || `Transaction failed: HTTP ${resp.status}`);
+        }
+
+        const mode = data.transaction_mode || "UNKNOWN";
+        const modeLabel = mode === "NATIVE_MONGODB"
+          ? "Mode: NATIVE MONGODB TRANSACTION"
+          : mode === "MOCK_SIMULATION"
+            ? "Mode: MOCK SIMULATION ONLY"
+            : `Mode: ${mode}`;
+
+        const modeElement = document.getElementById("tx-mode-label");
+        modeElement.innerText = modeLabel;
+        modeElement.className = mode === "NATIVE_MONGODB"
+          ? "text-[10px] text-emerald-400 font-mono"
+          : "text-[10px] text-amber-400 font-mono";
+
         const badge = document.getElementById("tx-status-badge");
         badge.innerText = data.status;
         badge.className = data.success 
@@ -814,9 +958,16 @@ Click 'Compile Report' to generate the verified academic submission document.
         logContainer.innerHTML = "";
         data.audit_events.forEach(evt => {
           const div = document.createElement("div");
-          if (evt.includes("ROLLBACK")) div.className = "text-red-400 font-bold";
-          else if (evt.includes("SUCCESSFUL")) div.className = "text-emerald-400 font-bold";
-          else div.className = "text-slate-300";
+          const eventText = evt.toLowerCase();
+          if (eventText.includes("abort") || eventText.includes("failure") ||
+              eventText.includes("rollback")) {
+            div.className = "text-red-400 font-bold";
+          } else if (eventText.includes("commit") ||
+                     eventText.includes("completed")) {
+            div.className = "text-emerald-400 font-bold";
+          } else {
+            div.className = "text-slate-300";
+          }
           div.innerText = `> ${evt}`;
           logContainer.appendChild(div);
         });
@@ -829,13 +980,20 @@ Click 'Compile Report' to generate the verified academic submission document.
           simulate_failure: fail,
           status: data.status,
           success: data.success,
+          transaction_id: data.transaction_id,
+          transaction_mode: data.transaction_mode,
           audit_events: data.audit_events,
           executed_at: new Date().toISOString()
         };
         sessionStorage.setItem('mongopolyglot_latest_transaction', JSON.stringify(transactionPayload));
 
         await refreshAccounts();
-        showToast(data.success ? "Transaction Committed!" : "Transaction Rolled Back!", data.success ? "success" : "error");
+        showToast(
+          data.success
+            ? `${modeLabel}: committed`
+            : `${modeLabel}: aborted`,
+          data.success ? "success" : "error"
+        );
       } catch (e) {
         showToast(e.message, "error");
       } finally {
@@ -872,7 +1030,7 @@ Click 'Compile Report' to generate the verified academic submission document.
 
         document.getElementById("bench-summary-box").classList.remove("hidden");
         document.getElementById("bench-rec-store").innerText = data.overall_summary.recommended_store;
-        document.getElementById("bench-speedup").innerText = data.overall_summary.speedup_ratio;
+        document.getElementById("bench-speedup").innerText = data.overall_summary.measurement_protocol || data.overall_summary.speedup_ratio;
 
         // Synchronize SQL vs NoSQL benchmark latency matrix into localStorage
         const benchmarkMatrixPayload = {

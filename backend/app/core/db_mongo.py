@@ -1,14 +1,16 @@
 import logging
 from typing import Optional, Any
-from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
+
+from motor.motor_asyncio import AsyncIOMotorClient
 import mongomock_motor
+
 from .config import settings
 
 logger = logging.getLogger(__name__)
 
 
 class MongoDBManager:
-    """Manages AsyncIO MongoDB client connections, databases, and transactions."""
+    """Manage real MongoDB and explicitly requested mock connections."""
 
     def __init__(self):
         self._client: Optional[Any] = None
@@ -16,45 +18,65 @@ class MongoDBManager:
         self._is_mock: bool = False
 
     async def connect(self, force_mock: Optional[bool] = None) -> Any:
-        use_mock = settings.USE_MOCK_SANDBOX if force_mock is None else force_mock
+        use_mock = (
+            settings.USE_MOCK_SANDBOX
+            if force_mock is None
+            else force_mock
+        )
+
+        if self._client is not None:
+            await self.disconnect()
 
         if use_mock:
-            logger.info("Initializing in-process Motor Mock Sandbox (mongomock-motor)...")
+            logger.info("Initializing explicit MongoDB mock sandbox.")
             self._client = mongomock_motor.AsyncMongoMockClient()
             self._db = self._client[settings.MONGODB_DB_NAME]
             self._is_mock = True
             return self._db
+
+        client = AsyncIOMotorClient(
+            settings.MONGODB_URI,
+            serverSelectionTimeoutMS=10000,
+            connectTimeoutMS=10000,
+            socketTimeoutMS=20000,
+            appname="MongoPolyglot Enterprise",
+        )
 
         try:
-            logger.info("Connecting to live MongoDB cluster: %s", settings.MONGODB_URI)
-            client = AsyncIOMotorClient(
-                settings.MONGODB_URI,
-                serverSelectionTimeoutMS=2000,
-                connectTimeoutMS=2000,
-            )
-            # Test connection ping
             await client.admin.command("ping")
+
             self._client = client
-            self._db = self._client[settings.MONGODB_DB_NAME]
+            self._db = client[settings.MONGODB_DB_NAME]
             self._is_mock = False
-            logger.info("Connected successfully to MongoDB database: %s", settings.MONGODB_DB_NAME)
-            return self._db
-        except Exception as exc:
-            logger.warning(
-                "Live MongoDB connection unavailable (%s). Activating in-process Motor Sandbox fallback.",
-                exc,
+
+            logger.info(
+                "Connected to real MongoDB database: %s",
+                settings.MONGODB_DB_NAME,
             )
-            self._client = mongomock_motor.AsyncMongoMockClient()
-            self._db = self._client[settings.MONGODB_DB_NAME]
-            self._is_mock = True
             return self._db
 
+        except Exception as exc:
+            client.close()
+            self._client = None
+            self._db = None
+            self._is_mock = False
+
+            logger.error(
+                "Real MongoDB connection failed. Error type: %s",
+                type(exc).__name__,
+            )
+            raise RuntimeError(
+                "Could not connect to MongoDB. Check the URI, "
+                "database credentials, network access and Atlas configuration."
+            ) from exc
+
     async def disconnect(self) -> None:
-        if self._client:
+        if self._client is not None:
             self._client.close()
             self._client = None
             self._db = None
-            logger.info("MongoDB client connection closed.")
+            self._is_mock = False
+            logger.info("MongoDB connection closed.")
 
     @property
     def client(self) -> Any:

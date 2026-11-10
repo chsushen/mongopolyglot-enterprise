@@ -87,17 +87,13 @@ async def dashboard():
     return HTMLResponse(html_path.read_text(encoding="utf-8"))
 
 
-@app.get("/", tags=["System"])
+@app.get("/", response_class=HTMLResponse, tags=["Storefront"])
 async def root():
-    return {
-        "app": settings.PROJECT_NAME,
-        "version": settings.VERSION,
-        "status": "OPERATIONAL",
-        "course_mapping": "21CSE562T (Units 4 & 5 CLA-2 Compliant)",
-        "database_backend": "MOTOR_MOCK_SANDBOX" if mongo_manager.is_mock else "LIVE_MONGODB_CLUSTER",
-        "dashboard_ui": "/dashboard",
-        "docs_url": "/docs",
-    }
+    """Render the customer-facing shopping storefront."""
+    html_path = TEMPLATES_DIR / "storefront.html"
+    if not html_path.exists():
+        return HTMLResponse("<h1>Storefront template not found</h1>", status_code=404)
+    return HTMLResponse(html_path.read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":

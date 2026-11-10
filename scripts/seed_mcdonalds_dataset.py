@@ -93,12 +93,18 @@ def generate_restaurants(count: int = 150) -> List[Dict[str, Any]]:
 async def seed_restaurants_data(mongo_db, sql_mgr, count: int = 150):
     restaurants = generate_restaurants(count)
 
-    # 1. Seed MongoDB
+    # 1. Seed MongoDB using stable-key upserts.
+    # Never clear the collection: preserve unrelated and existing records.
     coll = mongo_db["restaurants_mcdonalds"]
-    await coll.delete_many({})
-    await coll.insert_many(restaurants)
+    for restaurant in restaurants:
+        await coll.replace_one(
+            {"restaurant_id": restaurant["restaurant_id"]},
+            restaurant,
+            upsert=True,
+        )
     
     # Create indexes: Single, Compound, Geospatial
+    await coll.create_index([("restaurant_id", 1)])
     await coll.create_index([("borough", 1)])
     await coll.create_index([("cuisine", 1), ("borough", 1)])
     await coll.create_index([("address.coord", "2dsphere")])
@@ -108,9 +114,19 @@ async def seed_restaurants_data(mongo_db, sql_mgr, count: int = 150):
     for r in restaurants:
         await sql_mgr.execute_write(
             """
-            INSERT OR REPLACE INTO restaurants (
-                restaurant_id, name, borough, cuisine, street, zipcode, latitude, longitude, avg_rating
+            INSERT INTO restaurants (
+                restaurant_id, name, borough, cuisine, street, zipcode,
+                latitude, longitude, avg_rating
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(restaurant_id) DO UPDATE SET
+                name = excluded.name,
+                borough = excluded.borough,
+                cuisine = excluded.cuisine,
+                street = excluded.street,
+                zipcode = excluded.zipcode,
+                latitude = excluded.latitude,
+                longitude = excluded.longitude,
+                avg_rating = excluded.avg_rating
             """,
             (
                 r["restaurant_id"],

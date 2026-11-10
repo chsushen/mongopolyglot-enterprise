@@ -2,6 +2,11 @@ import logging
 import json
 from datetime import datetime, timezone
 from typing import Dict, Any, List, Optional
+from uuid import uuid4
+import math
+from pymongo import ReadPreference
+from pymongo.read_concern import ReadConcern
+from pymongo.write_concern import WriteConcern
 from bson import ObjectId
 from ..core.db_mongo import mongo_manager
 
@@ -141,6 +146,7 @@ class CRUDManager:
     # ACID Multi-Document Transactions
     # ---------------------------------------------------------------------------
 
+
     async def transfer_funds_transaction(
         self,
         from_account_id: str,
@@ -148,110 +154,306 @@ class CRUDManager:
         amount: float,
         simulate_failure: bool = False,
     ) -> Dict[str, Any]:
-        """Simulates an ACID multi-document banking transaction with explicit Commit or Abort (Rollback)."""
-        accounts_coll = self.db["accounts"]
-        audit_coll = self.db["transaction_audit_logs"]
+        """Dispatch to native MongoDB transactions or isolated mock simulation."""
 
-        events = []
-        now_str = datetime.now(timezone.utc).isoformat()
+        amount = float(amount)
 
-        # Step 1: Read initial balances
-        from_acc = await accounts_coll.find_one({"account_id": from_account_id})
-        to_acc = await accounts_coll.find_one({"account_id": to_account_id})
+        if not math.isfinite(amount) or amount <= 0:
+            raise ValueError("Transfer amount must be a positive finite number.")
 
-        if not from_acc:
+        if from_account_id == to_account_id:
+            raise ValueError("Source and destination accounts must be different.")
+
+        if mongo_manager.is_mock:
+            return await self._transfer_mock(
+                from_account_id, to_account_id, amount, simulate_failure
+            )
+
+        return await self._transfer_native(
+            from_account_id, to_account_id, amount, simulate_failure
+        )
+
+    async def _transfer_mock(
+        self,
+        from_account_id: str,
+        to_account_id: str,
+        amount: float,
+        simulate_failure: bool,
+    ) -> Dict[str, Any]:
+        """Test-only simulation. This is NOT a native ACID transaction."""
+
+        accounts = self.db["accounts"]
+        audit = self.db["transaction_audit_logs"]
+        tx_id = f"TX-{uuid4().hex[:12].upper()}"
+        now = datetime.now(timezone.utc).isoformat()
+
+        source = await accounts.find_one({"account_id": from_account_id})
+        destination = await accounts.find_one({"account_id": to_account_id})
+
+        if not source:
             raise ValueError(f"Source account '{from_account_id}' not found.")
-        if not to_acc:
+        if not destination:
             raise ValueError(f"Destination account '{to_account_id}' not found.")
 
-        initial_from_bal = float(from_acc.get("balance", 0.0))
-        initial_to_bal = float(to_acc.get("balance", 0.0))
+        source_before = float(source.get("balance", 0))
+        destination_before = float(destination.get("balance", 0))
 
-        events.append(f"Transaction session initialized for ${amount:.2f} transfer.")
-        events.append(f"Account {from_account_id} initial balance: ${initial_from_bal:.2f}")
-        events.append(f"Account {to_account_id} initial balance: ${initial_to_bal:.2f}")
-
-        # Check funds
-        if initial_from_bal < amount:
-            events.append("ABORT TRIGGERED: Insufficient funds in source account.")
+        def response(success, status, source_after, destination_after, events):
             return {
-                "success": False,
-                "status": "ABORTED_INSUFFICIENT_FUNDS",
-                "from_account_balance_before": initial_from_bal,
-                "from_account_balance_after": initial_from_bal,
-                "to_account_balance_before": initial_to_bal,
-                "to_account_balance_after": initial_to_bal,
+                "success": success,
+                "status": status,
+                "transaction_id": tx_id,
+                "transaction_mode": "MOCK_SIMULATION",
+                "from_account_balance_before": source_before,
+                "from_account_balance_after": source_after,
+                "to_account_balance_before": destination_before,
+                "to_account_balance_after": destination_after,
                 "audit_events": events,
             }
 
-        # Step 2: Debit Source Account
-        await accounts_coll.update_one(
-            {"account_id": from_account_id},
-            {"$inc": {"balance": -amount}, "$set": {"updated_at": now_str}},
-        )
-        events.append(f"Phase 1: Debited ${amount:.2f} from {from_account_id}.")
+        events = ["MOCK SIMULATION: No native database transaction is active."]
 
-        # Step 3: Check for simulated failure injection (Network drop, DB crash, Bug)
-        if simulate_failure:
-            events.append("🚨 ERROR INJECTED: Network partition occurred during transaction!")
-            events.append("ACID ROLLBACK INITIATED: Restoring debit...")
-            # Rollback
-            await accounts_coll.update_one(
-                {"account_id": from_account_id},
-                {"$inc": {"balance": amount}, "$set": {"updated_at": now_str}},
+        if source_before < amount:
+            events.append("Simulation aborted: insufficient source balance.")
+            return response(
+                False, "ABORTED_INSUFFICIENT_FUNDS",
+                source_before, destination_before, events
             )
-            events.append(f"ACID ROLLBACK COMPLETE: {from_account_id} balance restored to ${initial_from_bal:.2f}.")
 
-            await audit_coll.insert_one({
+        debit = await accounts.update_one(
+            {"account_id": from_account_id, "balance": {"$gte": amount}},
+            {"$inc": {"balance": -amount}, "$set": {"updated_at": now}},
+        )
+
+        if debit.matched_count != 1:
+            events.append("Simulation aborted: source balance changed.")
+            return response(
+                False, "ABORTED_INSUFFICIENT_FUNDS",
+                source_before, destination_before, events
+            )
+
+        if simulate_failure:
+            await accounts.update_one(
+                {"account_id": from_account_id},
+                {"$inc": {"balance": amount}, "$set": {"updated_at": now}},
+            )
+            events.append("Mock failure injected; compensating update executed.")
+
+            await audit.insert_one({
+                "transaction_id": tx_id,
                 "from_account": from_account_id,
                 "to_account": to_account_id,
                 "amount": amount,
-                "status": "ROLLED_BACK",
-                "timestamp": now_str,
+                "status": "MOCK_ROLLED_BACK",
+                "transaction_mode": "MOCK_SIMULATION",
+                "timestamp": now,
             })
 
-            return {
-                "success": False,
-                "status": "TRANSACTION_ABORTED_AND_ROLLED_BACK",
-                "from_account_balance_before": initial_from_bal,
-                "from_account_balance_after": initial_from_bal,
-                "to_account_balance_before": initial_to_bal,
-                "to_account_balance_after": initial_to_bal,
-                "audit_events": events,
-            }
+            return response(
+                False, "TRANSACTION_ABORTED_AND_ROLLED_BACK",
+                source_before, destination_before, events
+            )
 
-        # Step 4: Credit Destination Account
-        await accounts_coll.update_one(
+        await accounts.update_one(
             {"account_id": to_account_id},
-            {"$inc": {"balance": amount}, "$set": {"updated_at": now_str}},
+            {"$inc": {"balance": amount}, "$set": {"updated_at": now}},
         )
-        events.append(f"Phase 2: Credited ${amount:.2f} to {to_account_id}.")
 
-        # Step 5: Commit Audit Log
-        tx_id = f"TX-{int(datetime.now().timestamp())}"
-        await audit_coll.insert_one({
+        await audit.insert_one({
             "transaction_id": tx_id,
             "from_account": from_account_id,
             "to_account": to_account_id,
             "amount": amount,
-            "status": "COMMITTED",
-            "timestamp": now_str,
+            "status": "MOCK_COMMITTED",
+            "transaction_mode": "MOCK_SIMULATION",
+            "timestamp": now,
         })
-        events.append(f"Phase 3: Audit log committed. Transaction {tx_id} SUCCESSFUL.")
 
-        final_from_bal = round(initial_from_bal - amount, 2)
-        final_to_bal = round(initial_to_bal + amount, 2)
+        events.append("Mock transfer simulation completed.")
+
+        return response(
+            True, "TRANSACTION_COMMITTED",
+            round(source_before - amount, 2),
+            round(destination_before + amount, 2),
+            events,
+        )
+
+    async def _transfer_native(
+        self,
+        from_account_id: str,
+        to_account_id: str,
+        amount: float,
+        simulate_failure: bool,
+    ) -> Dict[str, Any]:
+        """Execute a real multi-document MongoDB transaction."""
+
+        db = self.db
+        client = db.client
+        accounts = db["accounts"]
+        audit = db["transaction_audit_logs"]
+
+        tx_id = f"TX-{uuid4().hex[:12].upper()}"
+        now = datetime.now(timezone.utc).isoformat()
+        events = ["Native MongoDB transaction session requested."]
+
+        source_before = None
+        destination_before = None
+        abort_reason = None
+
+        try:
+            async with await client.start_session() as session:
+                try:
+                    async with session.start_transaction(
+                        read_concern=ReadConcern("snapshot"),
+                        write_concern=WriteConcern("majority"),
+                        read_preference=ReadPreference.PRIMARY,
+                    ):
+                        source = await accounts.find_one(
+                            {"account_id": from_account_id},
+                            session=session,
+                        )
+                        destination = await accounts.find_one(
+                            {"account_id": to_account_id},
+                            session=session,
+                        )
+
+                        if source is None:
+                            raise ValueError(
+                                f"Source account '{from_account_id}' not found."
+                            )
+                        if destination is None:
+                            raise ValueError(
+                                f"Destination account '{to_account_id}' not found."
+                            )
+
+                        source_before = float(source.get("balance", 0))
+                        destination_before = float(destination.get("balance", 0))
+
+                        if source_before < amount:
+                            raise _TransferInsufficientFunds()
+
+                        debit = await accounts.update_one(
+                            {
+                                "account_id": from_account_id,
+                                "balance": {"$gte": amount},
+                            },
+                            {
+                                "$inc": {"balance": -amount},
+                                "$set": {"updated_at": now},
+                            },
+                            session=session,
+                        )
+
+                        if debit.matched_count != 1:
+                            raise _TransferInsufficientFunds()
+
+                        events.append("Source debit staged inside MongoDB transaction.")
+
+                        if simulate_failure:
+                            raise _TransferInjectedFailure(
+                                "Intentional failure injected after source debit."
+                            )
+
+                        credit = await accounts.update_one(
+                            {"account_id": to_account_id},
+                            {
+                                "$inc": {"balance": amount},
+                                "$set": {"updated_at": now},
+                            },
+                            session=session,
+                        )
+
+                        if credit.matched_count != 1:
+                            raise RuntimeError(
+                                "Destination account could not be credited."
+                            )
+
+                        events.append(
+                            "Destination credit staged inside MongoDB transaction."
+                        )
+
+                        # Audit record is part of the SAME transaction.
+                        await audit.insert_one({
+                            "transaction_id": tx_id,
+                            "from_account": from_account_id,
+                            "to_account": to_account_id,
+                            "amount": amount,
+                            "status": "COMMITTED",
+                            "transaction_mode": "NATIVE_MONGODB",
+                            "timestamp": now,
+                        }, session=session)
+
+                        events.append(
+                            "Transaction audit record staged for atomic commit."
+                        )
+
+                except _TransferInjectedFailure as exc:
+                    abort_reason = str(exc)
+                except _TransferInsufficientFunds:
+                    abort_reason = "Insufficient source balance."
+
+        except Exception:
+            logger.exception(
+                "Native MongoDB transaction failed; transaction was not reported as committed."
+            )
+            raise
+
+        if abort_reason:
+            # The transaction context has already aborted. This separate
+            # record documents the failed attempt, not part of the aborted work.
+            await audit.insert_one({
+                "transaction_id": tx_id,
+                "from_account": from_account_id,
+                "to_account": to_account_id,
+                "amount": amount,
+                "status": "ABORTED",
+                "transaction_mode": "NATIVE_MONGODB",
+                "reason": abort_reason,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            })
+
+            events.append(f"MongoDB transaction aborted: {abort_reason}")
+
+            insufficient = isinstance(
+                abort_reason, str
+            ) and abort_reason == "Insufficient source balance."
+
+            return {
+                "success": False,
+                "status": (
+                    "ABORTED_INSUFFICIENT_FUNDS"
+                    if insufficient else "TRANSACTION_ABORTED"
+                ),
+                "transaction_id": tx_id,
+                "transaction_mode": "NATIVE_MONGODB",
+                "from_account_balance_before": source_before,
+                "from_account_balance_after": source_before,
+                "to_account_balance_before": destination_before,
+                "to_account_balance_after": destination_before,
+                "audit_events": events,
+            }
+
+        events.append("MongoDB confirmed transaction commit.")
 
         return {
             "success": True,
             "status": "TRANSACTION_COMMITTED",
             "transaction_id": tx_id,
-            "from_account_balance_before": initial_from_bal,
-            "from_account_balance_after": final_from_bal,
-            "to_account_balance_before": initial_to_bal,
-            "to_account_balance_after": final_to_bal,
+            "transaction_mode": "NATIVE_MONGODB",
+            "from_account_balance_before": source_before,
+            "from_account_balance_after": round(source_before - amount, 2),
+            "to_account_balance_before": destination_before,
+            "to_account_balance_after": round(destination_before + amount, 2),
             "audit_events": events,
         }
+
+
+class _TransferInjectedFailure(Exception):
+    """Internal signal used to test native transaction abort."""
+
+
+class _TransferInsufficientFunds(Exception):
+    """Internal signal used to abort a transfer with insufficient funds."""
 
 
 crud_manager = CRUDManager()
